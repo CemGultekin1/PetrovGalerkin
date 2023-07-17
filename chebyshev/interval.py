@@ -27,7 +27,7 @@ class ChebyshevInterval(Interval,ChebyshevCoeffs):
     def __init__(self,a:float,b:float,coeffs:np.ndarray,) -> None:
         Interval.__init__(self,a,b)
         ChebyshevCoeffs.__init__(self,coeffs)
-        self.degree = coeffs.shape[0]
+        self.degree = coeffs.shape[0]        
         self.coeffs = coeffs.reshape([self.degree,-1])
     def to_ChebyshevCoeffs(self,):
         chebcoeff = ChebyshevCoeffs.__new__(ChebyshevCoeffs,)
@@ -40,7 +40,10 @@ class ChebyshevInterval(Interval,ChebyshevCoeffs):
     def __call__(self,x:NumericType):
         xhat = self.normalize(x)
         return coeffevl(xhat,self.coeffs)    
-    
+    def separate_funs(self,fun:FlatListOfFuns):
+        coeffss = fun.separate_vector(self.coeffs.reshape([self.degree,-1]),axis = 1)
+        return tuple(ChebyshevInterval(*self.interval,coeffs) for coeffs in coeffss)
+        
     def bisect(self,fun:FlatListOfFuns):
         # logging.debug(f'Refining the interval {self.interval} into two pieces')
         int0,int1 = Interval.bisect(self,)
@@ -75,6 +78,9 @@ class GridwiseChebyshev(Grid):
     @property
     def hs(self,)->List[float]:
         return [cint.h for cint in self.cheblist]
+    @property
+    def ps(self,)->List[int]:
+        return [cint.degree for cint in self.cheblist]
     def refine(self,i:int):
         super().refine(i)
         ci = self.cheblist[i]

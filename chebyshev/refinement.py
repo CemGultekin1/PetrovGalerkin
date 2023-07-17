@@ -99,6 +99,7 @@ class RefinementScheme:
         self.interval_number_control = inc
         self.grid_regularity_control = grc
         self.max_num_cycles = max_num_cycles
+    # def max_min_degrees(self,):
     def run_cycles(self,gcheb:GridwiseChebyshev):
         no_more_refinement = False
         num_cycle = 0
@@ -144,9 +145,3 @@ class Refiner:
         gcheb.refine(intid)
         
         
-default_error_control = ErrorControl(4,8,max_abs_err=1e-3)
-default_interval_number_control = IntervalNumberControl(2**4,2**9)
-default_grid_regularity_control = GridRegularityControl(50)
-default_refinement_scheme = RefinementScheme(default_error_control,\
-                default_interval_number_control,\
-                default_grid_regularity_control,max_num_cycles=16)

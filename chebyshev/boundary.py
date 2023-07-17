@@ -1,99 +1,127 @@
+from dataclasses import dataclass
 import numpy.polynomial.chebyshev as cheb
 import numpy as np
+
+from chebyshev.core import BoundaryCondition
 from .element import Degree
 class Boundary(Degree):
     def __init__(self,degree:int) -> None:
         super().__init__(degree)
         self.degree = degree
-        self.front = np.empty((self.degree,),dtype = float)
-        self.back = np.empty((self.degree,),dtype = float)
+        self.right = np.empty((self.degree,),dtype = float)
+        self.left = np.empty((self.degree,),dtype = float)
     def fillup(self,):...
     
-def flux_element(deg:int,front:bool = True):
+def flux_element(deg:int,right:bool = True):
     x = np.zeros((deg+1),dtype = float)
     x[deg] = 1
-    if front:
+    if right:
         return -cheb.chebval(1,x)
     else:
         return cheb.chebval(-1,x)
 
-def mean_element(deg:int,front:bool = True):
+def sum_value(deg:int,right:bool = True):
     x = np.zeros((deg+1),dtype = float)
     x[deg] = 1
-    if front:
-        return cheb.chebval(1,x)/2
+    if right:
+        return cheb.chebval(1,x)
     else:
-        return cheb.chebval(-1,x)/2
+        return cheb.chebval(-1,x)
     
 class Flux(Boundary):
     def fillup(self,):
         for i in self.degree_index_product(1):
-            self.front[i] =  flux_element(i,front=True)
-            self.back[i] =  flux_element(i,front=False)
+            self.right[i] =  flux_element(i,right=True)
+            self.left[i] =  flux_element(i,right=False)
             
-class Mean(Boundary):
+class Value(Boundary):
     def fillup(self,):
         for i in self.degree_index_product(1):
-            self.front[i] =  mean_element(i,front=True)
-            self.back[i] =  mean_element(i,front=False)
+            self.right[i] =  sum_value(i,right=True)
+            self.left[i] =  sum_value(i,right=False)
 
-class Edge(Mean):
-    def fillup(self):
-        super().fillup()
-        self.front *=2
-        self.back *=2
-    
 
-class QuadraticBoundary(Boundary):
+def degree_mat_multip(degmat:np.ndarray,bdrmat:np.ndarray):
+    bdrdeg = degmat.reshape([1,-1,1])*bdrmat.reshape([-1,1,-1])
+    return bdrdeg
+                      
+            
+class BoundaryConditionElementFactory:
+    def __init__(self,bc:BoundaryCondition,boundary_values:Value,outside_degree:int = 1) -> None:
+        self.boundary_condition = bc
+        self.boundary_values = boundary_values
+        self.outside_degree = outside_degree
+        
+    def generate_element(self,left_most_degree:int,right_most_degree:int):
+        
+        left_most_left = self.boundary_values.left[:left_most_degree]
+        right_most_right = self.boundary_values.right[:right_most_degree]
+        return BoundaryConditionElement(left_most_left,right_most_right,\
+            self.boundary_condition.B0,self.boundary_condition.B1,self.boundary_condition.c)
+        
+class BoundaryElementFactory(Boundary):
     def __init__(self,degree:int) -> None:
         self.degree = degree
         self.base_element = np.empty((self.degree,self.degree),dtype = float)        
-        self.front_cross = np.empty((self.degree,self.degree),dtype = float)
-        self.back_cross = np.empty((self.degree,self.degree),dtype = float)
+        self.right_cross = np.empty((self.degree,self.degree),dtype = float)
+        self.left_cross = np.empty((self.degree,self.degree),dtype = float)
         self.flux = Flux()
-        self.mean = Mean()
+        self.value = Value()
+        self.filledup = False
     def fillup(self,):
         self.flux.fillup()
-        self.mean.fillup()
+        self.value.fillup()
         for i,j in self.degree_index_product(2):
-            self.base_element[i,j] =  self.flux.front[i]*self.mean.front[j] + self.flux.back[i]*self.mean.front[j]
+            self.base_element[i,j] =  self.flux.right[i]*self.value.right[j] + self.flux.left[i]*self.value.right[j]
             
-            self.front_cross[i,j] =  self.flux.front[i]*self.mean.back[j] 
-            self.back_cross[i,j] =  self.flux.back[i]*self.mean.front[j]
-    def create_boundary_element(self,degree1:int,degree2:int,degree3:int):
-        bcross = self.back_cross[:degree1,:degree2]
-        fcross = self.front_cross[:degree2,:degree3]
+            self.right_cross[i,j] =  self.flux.right[i]*self.value.left[j] 
+            self.left_cross[i,j] =  self.flux.left[i]*self.value.right[j]
+        self.filledup = True
+    def generate_element(self,degree1:int,degree2:int,degree3:int):
+        bcross = self.left_cross[:degree1,:degree2]
+        fcross = self.right_cross[:degree3,:degree2]
         base = self.base_element[:degree2,:degree2]
         return BoundaryElement(bcross,base,fcross)
-    
+    def create_boundary_condition_element_factory(self,bc:BoundaryCondition,):
+        return BoundaryConditionElementFactory(bc,self.value)
+def eye_kron_multip(vec:np.ndarray,eyevec:np.ndarray):
+    return vec.reshape([vec.shape[0],1,vec.shape[1],1])*eyevec
 class BoundaryElement:
-    front_cross_element:np.ndarray 
-    base_element:np.ndarray
-    back_cross_element:np.ndarray     
-    def __init__(self,back_cross_element:np.ndarray ,base_element:np.ndarray,front_cross_element:np.ndarray) -> None:
-        self.front_cross_element = front_cross_element
+    left_cross_element:np.ndarray  # rd x cd
+    base_element:np.ndarray # cd x cd
+    right_cross_element:np.ndarray  # ld x cd
+    def __init__(self,left_cross_element:np.ndarray ,base_element:np.ndarray,right_cross_element:np.ndarray) -> None:
+        self.right_cross_element = right_cross_element
         self.base_element = base_element
-        self.back_cross_element = back_cross_element
+        self.left_cross_element = left_cross_element
+    def to_matrix_form(self,dim:int)->'BoundaryElementMatrices':
+        eye = np.eye(dim).reshape([1,dim,1,dim])
+        lmat,cmat,rmat = (eye_kron_multip(vec,eye) for vec in (self.left_cross_element,self.base_element,self.right_cross_element))
+        return BoundaryElementMatrices(lmat,cmat,rmat)
+@dataclass
+class BoundaryElementMatrices:
+    mat_left:np.ndarray
+    mat_center:np.ndarray
+    mat_right:np.ndarray
     
-    
-# class GlobalBoundaryEquation(LinearElement):
-#     left_boundary_element:np.ndarray
-#     right_boundary_element:np.ndarray
-#     def __init__(self,left_boundary_element:np.ndarray,right_boundary_element:np.ndarray) -> None:
-#         super().__init__()
-#         self.left_boundary_element = left_boundary_element
-#         self.right_boundary_element = right_boundary_element    
 
-# class BoundaryElementFactory(QuadraticBoundary):
-#     def base_boundary_elements(self,):
-#         return self.base_element
-#     def forward_cross_boundary_elements(self,):
-#         return self.front_cross
-#     def backward_cross_boundary_elements(self,):
-#         return self.back_cross
-#     def create_elements(self,):
-#         be = self.base_boundary_elements()
-#         fce = self.forward_cross_boundary_elements()
-#         bce = self.backward_cross_boundary_elements()
-#         return BoundaryElement(self.dim,self.degree,fce,be,bce)
-        
+@dataclass
+class BoundaryConditionElementMatrices:
+    mat_outer:np.ndarray
+    mat_b0:np.ndarray
+    mat_b1:np.ndarray
+    rhs_c:np.ndarray
+
+class BoundaryConditionElement:
+    def __init__(self,left_most_left:np.ndarray,right_most_right:np.ndarray,\
+                        b0:np.ndarray,b1:np.ndarray,c:np.ndarray) -> None:
+            outer = b0 + b1
+            self.mat_outer = outer
+            self.mat_left_most_left = left_most_left
+            self.mat_right_most_right = right_most_right
+            self.b0,self.b1,self.c = b0,b1,c
+            self.dim = b0.shape[0]
+    def to_matrix_form(self,)->'BoundaryConditionElementMatrices':
+        b0_interior = degree_mat_multip(self.mat_left_most_left/2,self.b0).reshape([self.dim,-1])      
+        b1_interior = degree_mat_multip(self.mat_right_most_right/2,self.b1).reshape([self.dim, -1])
+        return BoundaryConditionElementMatrices(self.mat_outer,b0_interior,b1_interior,self.c)

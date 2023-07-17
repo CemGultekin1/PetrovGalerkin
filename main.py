@@ -1,18 +1,16 @@
 import itertools
 from typing import Tuple, Union
 import numpy as np
+from chebyshev.core import BoundaryCondition
+from chebyshev.glbsys import LocalEquationFactory, NonAllocatedGlobalSystem, SparseGlobalSystem
 from chebyshev.interpolate import ErrorEstimator
-from chebyshev.refinement import default_refinement_scheme,Refiner
+from chebyshev.refinement import Refiner
 from chebyshev.funs import NumericType,ListOfFuns
 from chebyshev.interval import GridwiseChebyshev,ChebyshevInterval
 import matplotlib.pyplot as plt
 import logging
 logging.basicConfig(level=logging.DEBUG)
 
-def matfun(x:NumericType):
-    return np.stack([np.cos(i*x*np.pi) for i in range(9)],axis = 1).reshape([-1,3,3])
-def rhsfun(x:NumericType):
-    return np.stack([x**i for i in range(3)],axis = 1).reshape([-1,3])
 
 
 def plot(gcheb:GridwiseChebyshev,filename:str,n:int = 2**8):
@@ -29,18 +27,9 @@ def plot(gcheb:GridwiseChebyshev,filename:str,n:int = 2**8):
     plt.close()
     
 def singfun(x:NumericType):
-    return np.cos((4*x)**2*np.pi)
-def main():
-    # errest = ErrorEstimator(4,8)
-    # lof= ListOfFuns(singfun).flatten()    
-    # chebint = ChebyshevInterval.from_function(lof,4,0,1)
-    # # chebcoeffs = chebint.to_ChebyshevCoeffs()
-    # logging.info(errest.evaluate(chebint.coeffs,lof,(0,1)))
-    
-    
-    # return
-    
-    # lof = ListOfFuns(matfun,rhsfun)
+    return np.cos((2*x)**2*np.pi)
+
+def refinement_example():
     lof= ListOfFuns(singfun)
     flof = lof.flatten()    
     degree = 4
@@ -51,8 +40,24 @@ def main():
     refiner = Refiner(gcheb,default_refinement_scheme)
     for cynum,gcheb_ in refiner.inter_step():
         plot(gcheb_, f'after_refinements_{cynum}.png',n = 2**10)
-        
-    return
+
+
+dim = 3
+def matfun(x:NumericType):
+    return np.stack([np.cos(i*x*np.pi) for i in range(dim**2)],axis = 1).reshape([-1,dim,dim])
+def rhsfun(x:NumericType):
+    return np.stack([x**i for i in range(dim)],axis = 1).reshape([-1,dim])
+def main():    
+    lof = ListOfFuns(matfun,rhsfun).flatten()
+    degree = 4
+    gcheb = GridwiseChebyshev.from_function(lof,degree,0,1)
+    refiner = Refiner(gcheb,default_refinement_scheme)
+    
+    bcond = BoundaryCondition(np.random.randn(dim,dim),np.random.randn(dim,dim),np.random.randn(dim,))
+
+    leqf= LocalEquationFactory(8,bcond)
+    nags = NonAllocatedGlobalSystem(dim,lof,leqf)
+    # sgs = SparseGlobalSystem()
     
 if __name__== '__main__':
     main()
