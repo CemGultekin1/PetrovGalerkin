@@ -1,3 +1,4 @@
+import logging
 from typing import List
 import numpy as np
 from .interpolate import coeffevl,coeffgen
@@ -26,21 +27,22 @@ class ChebyshevInterval(Interval,ChebyshevCoeffs):
     def __init__(self,a:float,b:float,coeffs:np.ndarray,) -> None:
         Interval.__init__(self,a,b)
         ChebyshevCoeffs.__init__(self,coeffs)
-        self.degree = coeffs.shape[-1]
-        self.coeffs = coeffs.reshape([-1,self.degree])
+        self.degree = coeffs.shape[0]
+        self.coeffs = coeffs.reshape([self.degree,-1])
     def to_ChebyshevCoeffs(self,):
         chebcoeff = ChebyshevCoeffs.__new__(ChebyshevCoeffs,)
         chebcoeff.coeffs = self.coeffs
         return chebcoeff
     @classmethod
     def from_function(cls,fun:FlatListOfFuns,degree:int, x0:float,x1:float,):
-        coeffs = coeffgen(fun,degree,outbounds=(x0,x1))
+        coeffs = coeffgen(fun,degree-1,outbounds=(x0,x1))
         return ChebyshevInterval(x0,x1,coeffs,)
     def __call__(self,x:NumericType):
         xhat = self.normalize(x)
         return coeffevl(xhat,self.coeffs)    
     
     def bisect(self,fun:FlatListOfFuns):
+        # logging.debug(f'Refining the interval {self.interval} into two pieces')
         int0,int1 = Interval.bisect(self,)
         cint0 = ChebyshevInterval.from_function(fun,self.degree,*int0.interval)
         cint1 = ChebyshevInterval.from_function(fun,self.degree,*int1.interval)

@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 from typing import Any, Tuple
 import numpy.polynomial.chebyshev as cheb
@@ -33,7 +34,7 @@ class ShapedCoeffsEval(ShapedCoefficients):
         evals = self.fun(x,coeffs)
         if self.lefthanded:
             evals = evals.T
-        if isinstance(x,float):
+        if isinstance(x,(float,int)):
             evals = evals.reshape(shape[1:])
         else:
             assert isinstance(x,np.ndarray)
@@ -73,7 +74,7 @@ class ChebyshevPoints:
                 self.pts = x
                 return x
         foo = MemCallable()
-        _ = cheb.chebinterpolate(foo,degree = self.degree)
+        _ = cheb.chebinterpolate(foo,self.degree)
         self.points = foo.pts
 class ChebyshevPointsCollection:
     def __init__(self,min_degree:int,max_degree:int) -> None:
@@ -82,6 +83,7 @@ class ChebyshevPointsCollection:
         self.points_dict = {deg: ChebyshevPoints(deg) for deg in range(self.min_degree,self.max_degree+1)}
     def __getitem__(self,degree:int):
         if not (degree >= self.min_degree and  degree <= self.max_degree):
+            logging.error(f'Requested degree {degree} doesn\'t fall into the interval [{self.min_degree},{self.max_degree}]!')
             raise Exception
         return self.points_dict[degree].get_points()
 
@@ -95,20 +97,28 @@ coeffevl = ShapedCoeffsEval(cheb.chebval,lefthanded=lefthanded)
 class ErrorEstimator(ChebyshevPointsCollection):
     def __init__(self, min_degree: int, max_degree: int) -> None:
         super().__init__(min_degree, max_degree + 1)
-    def evaluate(self,coeffs:np.ndarray, lofns:FlatListOfFuns)->float:
-        deg = coeffs.shape[0]
-        pts = self[deg+1]
+    def evaluate(self,coeffs:np.ndarray, lofns:FlatListOfFuns,interval:Tuple[float,float])->float:
+        deg = coeffs.shape[0] - 1
+        pts_ = self[deg+1]
+        a,b = interval
+        pts = (pts_ + 1)/2 * (b-a) + a
         truvals =lofns(pts)
-        estvals = coeffevl(pts,coeffs,)
+        estvals = coeffevl(pts_,coeffs,)
+        # logging.debug(f'pts = {pts}')
+        # logging.debug(f'truvals = {truvals}')
+        # logging.debug(f'estvals = {estvals}')
         return np.amax(np.abs(truvals - estvals))
     
 def foo(x):
     return np.stack([np.ones(x.shape),x,x**2,x**3],axis = 1).reshape([-1,2,2])
 
 def main():
-    x = np.linspace(-1,1,100)
-    coeffs = coeffgen(foo,4,outbounds = (0,0.5))
-    print(coeffs.shape)
-    vals = coeffevl(x,coeffs)
+    # x = np.linspace(-1,1,100)
+    # coeffs = coeffgen(foo,4,outbounds = (0,0.5))
+    # print(coeffs.shape)
+    # vals = coeffevl(x,coeffs)
+    cpt = ChebyshevPoints(10)
+    cpt.gather_points()
+    print(cpt.points)
 if __name__ == '__main__':
     main()
