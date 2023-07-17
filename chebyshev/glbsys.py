@@ -26,7 +26,8 @@ class BlockColumns:
         
         
 class LocalEquationFactory:
-    def __init__(self,max_degree:int,boundary_condition:BoundaryCondition) -> None:        
+    def __init__(self,dim:int,max_degree:int,boundary_condition:BoundaryCondition) -> None:        
+        self.dim = dim
         self.interr = InteriorElementFactory(max_degree)
         self.interr.fillup()
         self.bndr = BoundaryElementFactory(max_degree)        
@@ -37,7 +38,7 @@ class LocalEquationFactory:
         center_degree = center_chebint.degree
         matfun,rhsfun = center_chebint.separate_funs(funs)
         interrelem = self.interr.generate_element(matfun,rhsfun).to_matrix_form()
-        bndrelem = self.bndr.generate_element(left_degree,center_degree,right_degree).to_matrix_form()
+        bndrelem = self.bndr.generate_element(left_degree,center_degree,right_degree).to_matrix_form(self.dim)
         return BlockColumns(interrelem,bndrelem)
     def generate_boundary_condition_matrices(self,leftmost_degree:int,rightmost_degree:int):
         bce = self.bndr_cond.generate_element(leftmost_degree,rightmost_degree)
@@ -131,6 +132,7 @@ class SparseGlobalSystem:
         mat = lil_matrix(blocks.mat_shape)
         rhs = np.zeros(blocks.rhs_shape)
         for blk in blocks.mat_blocks:
+            logging.debug(f'blk.slicetpl = {blk.slicetpl},mat.shape = {mat.shape},blk.matblock.shape = {blk.matblock.shape}')
             mat[blk.slicetpl] = blk.matblock
         for blk in blocks.rhs_blocks:
             rhs[blk.slicetpl] = blk.matblock

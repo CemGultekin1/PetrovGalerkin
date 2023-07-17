@@ -7,10 +7,10 @@ class ShapeRecognition:
     def __init__(self) -> None:
         self.tuple = ()
         self.is_recognized = False
-    def recognize(self,val:np.ndarray):
+    def recognize(self,shp:Tuple[int,...]):
         if self.is_recognized:
             return
-        self.tuple = val.shape
+        self.tuple = shp
         self.is_recognized = True
         
 class ConcatenatedVectorSeparator:
@@ -18,8 +18,10 @@ class ConcatenatedVectorSeparator:
         self.shps = shps
         self.indices = np.cumsum([np.prod(shp) for shp in shps])
     def reshape_collapsed_axis(self,vec:np.ndarray,axis = 1)->Tuple[np.ndarray,...]:
-        vecs =  np.split(vec,self.indices,axis = axis)
-        vecs = tuple(vec.reshape(shp) for vec,shp in zip(vecs,self.shps))
+        vecs =  np.split(vec,self.indices[:-1],axis = axis)
+        shps = tuple(list(vec_.shape) for vec_ in vecs)
+        shps = tuple(list(shp_[:axis]) + list(shp) + list(shp_[axis+1:]) for shp_,shp in zip(shps,self.shps))
+        vecs = tuple(vec.reshape(shp) for vec,shp in zip(vecs,shps))
         return vecs
 class FunShapes:
     def __init__(self,nfuns:int) -> None:
@@ -34,13 +36,17 @@ class FunShapes:
     def init_separator(self,):
         shps = [shp.tuple for shp in self.shapes_list]
         self.separator =ConcatenatedVectorSeparator(*shps)
-    def recognize_shape(self,val,i:int):
+    def recognize_shape(self,val:np.ndarray,i:int,x:NumericType):
         if self.all_recognized:
             return
         sr = self.shapes_list[i]
         if sr.is_recognized:
             return
-        sr.recognize(val)
+        if np.isscalar(x):
+            sr.recognize(val.shape)
+        else:
+            shp = val.shape[x.ndim:]
+            sr.recognize(shp)
         self.all_recognized = self.check_all_recognitions()
         if self.all_recognized:
             self.init_separator()
@@ -54,7 +60,7 @@ class ListOfFuns(list,FunShapes):
         return super().__getitem__(i)
     def eval_rule(self,fun,x,i):        
         y = fun(x)
-        self.recognize_shape(y,i)
+        self.recognize_shape(y,i,x)
         return y
     def __call__(self,x:NumericType)->Tuple[NumericType]:
         outs = []

@@ -137,7 +137,7 @@ class Refiner:
             self.run_refinement(rt)
         yield cy0,self.grid_cheb
     def run(self,):
-        for cy,rt in self.refinement_scheme.run_cycles(self.grid_cheb):
+        for _,rt in self.refinement_scheme.run_cycles(self.grid_cheb):
             self.run_refinement(rt)
     def run_refinement(self,rt:RefinementTask):
         gcheb = rt.gridcheb

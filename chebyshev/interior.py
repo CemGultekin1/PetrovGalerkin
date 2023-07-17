@@ -42,10 +42,10 @@ class InteriorElement:
     def to_matrix_form(self,):
         dim = self.rhs_element.shape[1]
         deg = self.mat_element.shape[0]
-        mat = self.mat_element.reshape([deg,deg,dim,dim]).transpose((0,2,1,3))
+        mat = self.mat_element.reshape([deg,deg,dim,dim]).transpose((0,2,1,3)).reshape([deg*dim,deg*dim])
         rhs = self.rhs_element.flatten()
         der = self.der_quads.reshape([-1,1])*np.eye(dim).reshape([1,-1])
-        der = der.reshape([deg,deg,dim,dim]).transpose((0,2,1,3))
+        der = der.reshape([deg,deg,dim,dim]).transpose((0,2,1,3)).reshape([deg*dim,deg*dim])
         return InteriorElementMatrices(mat + der, rhs)
 @dataclass
 class InteriorElementMatrices:

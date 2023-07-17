@@ -96,4 +96,5 @@ class GridwiseChebyshev(Grid):
             ys.append(y)
         ys = np.stack(ys,axis = 0)
         return ys
-    
+    def __str__(self,):
+        return f'# of intervals = {len(self.cheblist)} with (max,min) separations = {np.amax(self.hs),np.amin(self.hs)}'

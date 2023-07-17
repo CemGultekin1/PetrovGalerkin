@@ -31,18 +31,19 @@ def sum_value(deg:int,right:bool = True):
 class Flux(Boundary):
     def fillup(self,):
         for i in self.degree_index_product(1):
-            self.right[i] =  flux_element(i,right=True)
-            self.left[i] =  flux_element(i,right=False)
+            self.right[i] =  flux_element(*i,right=True)
+            self.left[i] =  flux_element(*i,right=False)
             
 class Value(Boundary):
     def fillup(self,):
         for i in self.degree_index_product(1):
-            self.right[i] =  sum_value(i,right=True)
-            self.left[i] =  sum_value(i,right=False)
+            self.right[i] =  sum_value(*i,right=True)
+            self.left[i] =  sum_value(*i,right=False)
 
 
 def degree_mat_multip(degmat:np.ndarray,bdrmat:np.ndarray):
-    bdrdeg = degmat.reshape([1,-1,1])*bdrmat.reshape([-1,1,-1])
+    
+    bdrdeg = degmat.reshape([1,-1,1])*np.stack([bdrmat],axis = 1)
     return bdrdeg
                       
             
@@ -65,8 +66,8 @@ class BoundaryElementFactory(Boundary):
         self.base_element = np.empty((self.degree,self.degree),dtype = float)        
         self.right_cross = np.empty((self.degree,self.degree),dtype = float)
         self.left_cross = np.empty((self.degree,self.degree),dtype = float)
-        self.flux = Flux()
-        self.value = Value()
+        self.flux = Flux(degree)
+        self.value = Value(degree)
         self.filledup = False
     def fillup(self,):
         self.flux.fillup()
@@ -85,7 +86,8 @@ class BoundaryElementFactory(Boundary):
     def create_boundary_condition_element_factory(self,bc:BoundaryCondition,):
         return BoundaryConditionElementFactory(bc,self.value)
 def eye_kron_multip(vec:np.ndarray,eyevec:np.ndarray):
-    return vec.reshape([vec.shape[0],1,vec.shape[1],1])*eyevec
+    vec1 =  vec.reshape([vec.shape[0],1,vec.shape[1],1])*eyevec
+    return vec1.reshape([vec.shape[0]*eyevec.shape[1],-1])
 class BoundaryElement:
     left_cross_element:np.ndarray  # rd x cd
     base_element:np.ndarray # cd x cd
