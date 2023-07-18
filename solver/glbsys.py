@@ -3,9 +3,8 @@ from .matalloc import BlockedMatrixFrame
 import numpy as np
 from scipy.sparse import lil_matrix
 from .eqgen import LocalEquationFactory
-from chebyshev.matalloc import BlockedMatrixFrame
-from .interval import GridwiseChebyshev
-from .funs import FlatListOfFuns
+from .matalloc import BlockedMatrixFrame
+from chebyshev import GridwiseChebyshev,FlatListOfFuns
 
 class GlobalSysAllocator:
     def __init__(self,dim:int,funs:FlatListOfFuns,lcleq:LocalEquationFactory) -> None:

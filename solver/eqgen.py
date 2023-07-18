@@ -1,10 +1,8 @@
-from chebyshev.core import BoundaryCondition
-from chebyshev.matalloc import BlockColumns, TriRowColumn
+from .core import BoundaryCondition
+from .matalloc import BlockColumns, TriRowColumn
 from .boundary import BoundaryElementFactory
 from .interior import InteriorElementFactory
-from .interval import ChebyshevInterval
-from .funs import FlatListOfFuns
-
+from chebyshev import FlatListOfFuns,ChebyshevInterval
 
 class LocalEquationFactory:
     def __init__(self,dim:int,max_degree:int,boundary_condition:BoundaryCondition) -> None:        

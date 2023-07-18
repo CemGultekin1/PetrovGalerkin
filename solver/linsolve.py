@@ -1,8 +1,7 @@
-import logging
 from scipy.sparse.linalg import spsolve
 import numpy as np
 from .glbsys import SparseGlobalSystem
-from .interval import GridwiseChebyshev
+from chebyshev import GridwiseChebyshev
 class GlobalSystemSolver(SparseGlobalSystem):
     def __init__(self,spglblsys:SparseGlobalSystem) -> None:
         self.__dict__.update(spglblsys.__dict__)

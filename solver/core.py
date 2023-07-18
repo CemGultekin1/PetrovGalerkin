@@ -1,10 +1,9 @@
 from dataclasses import dataclass
 import logging
-from typing import  List, Tuple
-from .interval import GridwiseChebyshev,ChebyshevInterval
-from .funs import NumericFunType,ListOfFuns,FlatListOfFuns
-from .interpolate import ErrorEstimator
+from typing import   Tuple
+from chebyshev import  GridwiseChebyshev,NumericFunType,ListOfFuns
 import numpy as np
+
 def is_square(x:np.ndarray):
     if x.ndim != 2:
         return False

@@ -1,7 +1,7 @@
 from datetime  import datetime
 import os
-
 from fldrsys.defaults import OUTPUTS
+
 class Folder:
     path:str
     def __init__(self,*conns) -> None:

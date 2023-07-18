@@ -2,7 +2,7 @@ import logging
 from typing import List
 import numpy as np
 from .interpolate import coeffevl,coeffgen
-from chebyshev.funs import FlatListOfFuns,NumericType
+from .funs import FlatListOfFuns,NumericType
 
 class Interval:
     def __init__(self,a:float,b:float,) -> None:

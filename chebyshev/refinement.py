@@ -1,4 +1,4 @@
-from typing import  Generator, List, Tuple
+from typing import  Generator, List
 from .interval import GridwiseChebyshev,ChebyshevInterval
 from .funs import FlatListOfFuns
 from .interpolate import ErrorEstimator

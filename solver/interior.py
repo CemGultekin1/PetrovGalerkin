@@ -1,35 +1,6 @@
 from dataclasses import dataclass
-import logging
-from .element  import Degree
-import numpy.polynomial.chebyshev as cheb
 import numpy as np
-from .interval import ChebyshevInterval
-def quadrature(*degrees:int, first_derivative:bool = False):
-    y = np.ones([1],dtype = float)
-    for i,deg in enumerate(degrees):
-        x = np.zeros((deg+1),dtype = float)
-        x[deg] = 1
-        if i == 0 and first_derivative:
-            x = cheb.chebder(x)
-        y = cheb.chebmul(y,x)
-    yint = cheb.chebint(y)
-    return cheb.chebval(1,yint) - cheb.chebval(-1,yint)
-    
-
-class QuadratureTensor(Degree):
-    def __init__(self,degree:int) -> None:
-        super().__init__(degree)
-        self.tri_quads = np.empty((self.degree,self.degree,self.degree),dtype = float)
-        self.der_dub_quads = np.empty((self.degree,self.degree,),dtype = float)
-        self.dub_quads = np.empty((self.degree,self.degree,),dtype = float)
-        self.filledup = False
-    def fillup(self,):
-        for i,j,k in self.degree_index_product(3):
-            self.tri_quads[i,j,k] = -quadrature(i,j,k)
-        for i,j in self.degree_index_product(2):
-            self.dub_quads[i,j] = quadrature(i,j)
-            self.der_dub_quads[i,j] = -quadrature(i,j,first_derivative=True)
-        self.filledup = True
+from chebyshev import ChebyshevInterval,QuadratureTensor
     
 
 class InteriorElement:
@@ -42,10 +13,7 @@ class InteriorElement:
         self.rhs_element = rhs_element    
     def to_matrix_form(self,):
         dim = self.rhs_element.shape[1]
-        deg = self.mat_element.shape[1]
-        # non-adjoint
-        # mat = self.mat_element.reshape([-1,deg,dim,dim]).transpose((0,2,1,3)).reshape([-1,deg*dim])
-        
+        deg = self.mat_element.shape[1]        
         # takes the transpose for adjoint
         mat = self.mat_element.reshape([-1,deg,dim,dim]).transpose((0,3,1,2)).reshape([-1,deg*dim]) 
         rhs = self.rhs_element.flatten()

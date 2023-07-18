@@ -1,18 +1,15 @@
 import os
 import numpy as np
-from chebyshev.core import BoundaryCondition
-from chebyshev.glbsys import SparseGlobalSystem,GlobalSysAllocator
-from chebyshev.eqgen import LocalEquationFactory
-from chebyshev.linsolve import GlobalSystemSolver
-from chebyshev.refinement import Refiner
-from chebyshev.funs import NumericType,ListOfFuns
-from chebyshev.interval import GridwiseChebyshev
+from solver.core import BoundaryCondition
+from solver.glbsys import SparseGlobalSystem,GlobalSysAllocator
+from solver.eqgen import LocalEquationFactory
+from solver.linsolve import GlobalSystemSolver
+from chebyshev import ListOfFuns,GridwiseChebyshev,NumericType
 import logging
-from chebyshev.defaults import refinement_scheme
 import matplotlib.pyplot as plt
 from examples.nprint import MatPrinter
 from examples.plotter import GridwiseChebyshevPlotter
-from fldrsys.foldersys import OutputsFolders
+from fldrsys.folders import OutputsFolders
 logging.basicConfig(level=logging.INFO)
 
 
@@ -23,7 +20,7 @@ def rhsfun(x:NumericType):
     return np.stack([x**(i+1) for i in range(dim)],axis = 1).reshape([-1,dim])
 def main():    
     lof = ListOfFuns(matfun,rhsfun).flatten()
-    degree = 5
+    degree = 4
     max_degree = degree
     gcheb = GridwiseChebyshev.from_function(lof,degree,0,1)
     np.random.seed(0)
