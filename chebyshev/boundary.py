@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import logging
 import numpy.polynomial.chebyshev as cheb
 import numpy as np
 
@@ -63,8 +64,7 @@ class BoundaryConditionElementFactory:
 class BoundaryElementFactory(Boundary):
     def __init__(self,degree:int) -> None:
         self.degree = degree
-        self.base_leftleft = np.empty((self.degree,self.degree),dtype = float)  
-        self.base_rightright = np.empty((self.degree,self.degree),dtype = float)        
+        self.center = np.empty((self.degree,self.degree),dtype = float)  
         self.right_cross = np.empty((self.degree,self.degree),dtype = float)
         self.left_cross = np.empty((self.degree,self.degree),dtype = float)
         self.value = Value(degree)
@@ -72,28 +72,18 @@ class BoundaryElementFactory(Boundary):
     def fillup(self,):
         self.value.fillup()
         for i,j in self.degree_index_product(2):
-            self.base_rightright[i,j] =  self.value.right[i]*self.value.right[j]/2
-            self.base_leftleft[i,j] =  - self.value.left[i]*self.value.left[j]/2
+            self.center[i,j] =  self.value.right[i]*self.value.right[j]/2 - self.value.left[i]*self.value.left[j]/2
             self.right_cross[i,j] =  -self.value.left[i]*self.value.right[j]/2
             self.left_cross[i,j] =  self.value.right[i]*self.value.left[j]/2
         self.filledup = True
-    def generate_element(self,degree1:int,degree2:int,degree3:int,minus_one_test_degree:bool = False):
+    def generate_element(self,degree1:int,degree2:int,degree3:int,):
         bcross = self.left_cross[:degree1,:degree2]
         fcross = self.right_cross[:degree3,:degree2]
-        base = self.base_rightright[:degree2,:degree2]  + self.base_leftleft[:degree2,:degree2]
-        if minus_one_test_degree:
-            base = base[:-1,]
+        base = self.center[:degree2,:degree2]  
+        # if degree2==2:
+        #     logging.info(f'Center = \n{base}')
+        
         return BoundaryElement(bcross,base,fcross)
-    def generate_edge_element_correction(self,degree1:int,left:bool = False,right:bool = False,minus_one_test_degree:bool = False):
-        deg11 = degree1
-        deg12 = degree1
-        if minus_one_test_degree:
-            deg11 -= 1
-        if left:
-            base = self.base_rightright[:deg11,:deg12]/2
-        elif right:
-            base = self.base_leftleft[:deg11,:deg12]/2
-        return BaseBoundaryElement(base)
     def create_boundary_condition_element_factory(self,bc:BoundaryCondition,):
         return BoundaryConditionElementFactory(bc,self.value)
 def eye_kron_multip(vec:np.ndarray,eyevec:np.ndarray):

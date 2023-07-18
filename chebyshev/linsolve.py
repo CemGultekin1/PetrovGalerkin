@@ -11,7 +11,6 @@ class GlobalSystemSolver(SparseGlobalSystem):
         self.solution =  spsolve(self.mat,self.rhs)
         if not isinstance(self.solution,np.ndarray):
             self.solution = self.solution.toarray()
-        logging.info(f'Linear solution residue = {np.linalg.norm(self.mat@self.solution - self.rhs)}')
     def get_wrapped_solution(self,gcheb:GridwiseChebyshev)->GridwiseChebyshev:
         return gcheb.create_from_solution(self.solution,self.dim)
         

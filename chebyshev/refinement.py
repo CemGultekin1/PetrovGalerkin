@@ -72,7 +72,6 @@ class IntervalNumberControl(RepresentationControl):
     def create_refinements(self,refinement_task:RefinementRanking,gcheb:GridwiseChebyshev,):
         n = len(gcheb.cheblist)
         if n > self.max_num_intervals:
-            logging.info(f'Max number of intervals reached: {n} > {self.max_num_intervals}')
             refinement_task.clean_all()
             return refinement_task
         diff = self.max_num_intervals - n
