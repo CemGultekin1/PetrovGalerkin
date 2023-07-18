@@ -3,8 +3,8 @@ from .refinement import ErrorControl,IntervalNumberControl,GridRegularityControl
 
 
 
-min_deg = 4
-max_deg = 8
+min_deg = 1
+max_deg = 14
 max_abs_err = 1e-2
 max_int_count = 2**9
 max_ref_count_per_cycle = 2**4

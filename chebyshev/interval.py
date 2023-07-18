@@ -50,13 +50,22 @@ class ChebyshevInterval(Interval,ChebyshevCoeffs):
         cint0 = ChebyshevInterval.from_function(fun,self.degree,*int0.interval)
         cint1 = ChebyshevInterval.from_function(fun,self.degree,*int1.interval)
         return cint0,cint1
+    def new_by_coeff(self,coeffs:np.ndarray):
+        coeffs = coeffs.reshape([self.degree,-1])
+        return ChebyshevInterval(*self.interval,coeffs)
         
 class Grid(Interval):
     def __init__(self,x0:float,x1:float) -> None:
         super().__init__(x0,x1)
         self.edges = [x0,x1]
     def loc(self,x:NumericType):
-        return np.searchsorted(self.edges,x,side = 'right') - 1
+        location =  np.searchsorted(self.edges,x,side = 'right') - 1
+        if isinstance(x,np.ndarray):
+            return location
+        elif np.isscalar(x):
+            return (location,)
+        else:
+            logging.error(f'The input {x} is neither scalar nor np.ndarray')
     def refine(self,i:int):
         a,b = self.edges[i],self.edges[i+1]
         m = (a+b)/2
@@ -98,3 +107,21 @@ class GridwiseChebyshev(Grid):
         return ys
     def __str__(self,):
         return f'# of intervals = {len(self.cheblist)} with (max,min) separations = {np.amax(self.hs),np.amin(self.hs)}'
+    def create_from_solution(self,solution:np.ndarray,dim:int):
+        solution = solution.reshape([-1,dim])
+        # far_edge_value = solution[0]
+        # solution = solution[1:]
+        ps = self.ps
+        per_int_solution = np.split(solution,np.cumsum(ps),axis = 0)
+        new_cheb_list = []
+        # logging.debug(f'Solution shape = {solution.shape}, number of intervals = {len(self.cheblist)}')
+        for coeffs,chebint in zip(per_int_solution,self.cheblist):
+            new_cheb_list.append(chebint.new_by_coeff(coeffs))
+        ngridcheb =GridwiseChebyshev.__new__(GridwiseChebyshev)
+        ngridcheb.cheblist = new_cheb_list
+        ngridcheb.fun = ngridcheb
+        ngridcheb.edges = self.edges
+        return ngridcheb
+        
+       
+        

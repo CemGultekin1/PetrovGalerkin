@@ -30,22 +30,22 @@ class QuadratureTensor(Degree):
             self.der_dub_quads[i,j] = quadrature(i,j,first_derivative=True)
         self.filledup = True
     
-    
+
 class InteriorElement:
-    mat_element:np.ndarray # deg x deg x (dim x dim)
-    rhs_element:np.ndarray # deg x dim
-    der_quads:np.ndarray # deg x deg
+    mat_element:np.ndarray # deg' x deg x (dim x dim)
+    rhs_element:np.ndarray # deg' x dim
+    der_quads:np.ndarray # deg' x deg
     def __init__(self,der_quads:np.ndarray,mat_element:np.ndarray,rhs_element:np.ndarray) -> None:
         self.der_quads = der_quads
         self.mat_element = mat_element        
         self.rhs_element = rhs_element    
     def to_matrix_form(self,):
         dim = self.rhs_element.shape[1]
-        deg = self.mat_element.shape[0]
-        mat = self.mat_element.reshape([deg,deg,dim,dim]).transpose((0,2,1,3)).reshape([deg*dim,deg*dim])
+        deg = self.mat_element.shape[1]
+        mat = self.mat_element.reshape([-1,deg,dim,dim]).transpose((0,2,1,3)).reshape([-1,deg*dim])
         rhs = self.rhs_element.flatten()
         der = self.der_quads.reshape([-1,1])*np.eye(dim).reshape([1,-1])
-        der = der.reshape([deg,deg,dim,dim]).transpose((0,2,1,3)).reshape([deg*dim,deg*dim])
+        der = der.reshape([-1,deg,dim,dim]).transpose((0,2,1,3)).reshape([-1,deg*dim])
         return InteriorElementMatrices(mat + der, rhs)
 @dataclass
 class InteriorElementMatrices:
@@ -54,13 +54,24 @@ class InteriorElementMatrices:
         
         
 class InteriorElementFactory(QuadratureTensor):
-    def tri_multip(self,coeff:np.ndarray,degree:int)->np.ndarray:
-        return np.dot(self.tri_quads[:degree,:degree,:degree],coeff) 
-    def dub_multip(self,coeff:np.ndarray,degree:int)->np.ndarray:
-        return np.dot(self.dub_quads[:degree,:degree],coeff)
-    def generate_element(self,matfun:ChebyshevInterval,rhsfun:ChebyshevInterval):
+    def tri_multip(self,coeff:np.ndarray,degree:int,minus_one_test_degree:bool = False)->np.ndarray:
+        if not minus_one_test_degree:
+            return np.dot(self.tri_quads[:degree,:degree,:degree],coeff) 
+        else:
+            return np.dot(self.tri_quads[:degree-1,:degree,:degree],coeff) 
+    def dub_multip(self,coeff:np.ndarray,degree:int,minus_one_test_degree:bool = False)->np.ndarray:
+        if not minus_one_test_degree:
+            return np.dot(self.dub_quads[:degree,:degree],coeff)
+        else:
+            return np.dot(self.dub_quads[:degree-1,:degree],coeff)
+    def generate_element(self,matfun:ChebyshevInterval,rhsfun:ChebyshevInterval,minus_one_test_degree:bool = False):
         deg = matfun.degree
-        matel = self.tri_multip(matfun.coeffs,deg)*matfun.h
-        rhsel = self.dub_multip(rhsfun.coeffs,deg)*rhsfun.h
+        matel = self.tri_multip(matfun.coeffs,deg,)*matfun.h
+        rhsel = self.dub_multip(rhsfun.coeffs,deg,)*rhsfun.h
         der_quads = self.der_dub_quads[:deg,:deg]
+        if minus_one_test_degree:
+            der_quads = der_quads[:-1,]
+            matel = matel[:-1,]
+            rhsel = rhsel[:-1,]
+            
         return InteriorElement(der_quads,matel,rhsel)
