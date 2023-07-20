@@ -23,6 +23,11 @@ class ConcatenatedVectorSeparator:
         shps = tuple(list(shp_[:axis]) + list(shp) + list(shp_[axis+1:]) for shp_,shp in zip(shps,self.shps))
         vecs = tuple(vec.reshape(shp) for vec,shp in zip(vecs,shps))
         return vecs
+    def __call__(self,vec:np.ndarray,axis = 1)->Tuple[np.ndarray,...]:
+        return self.reshape_collapsed_axis(vec,axis=axis)
+class EmptySeparator(ConcatenatedVectorSeparator):
+    def __init__(self, ) -> None:
+        super().__init__()
 class FunShapes:
     def __init__(self,nfuns:int) -> None:
         self.separator = None

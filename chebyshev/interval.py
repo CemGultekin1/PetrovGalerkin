@@ -2,7 +2,7 @@ import logging
 from typing import List
 import numpy as np
 from .interpolate import coeffevl,coeffgen
-from .funs import FlatListOfFuns,NumericType
+from .funs import FlatListOfFuns,NumericType,ConcatenatedVectorSeparator,EmptySeparator
 
 class Interval:
     def __init__(self,a:float,b:float,) -> None:
@@ -24,11 +24,12 @@ class ChebyshevCoeffs:
     def __call__(self,x:NumericType):
         return coeffevl(x,self.coeffs)
 class ChebyshevInterval(Interval,ChebyshevCoeffs):
-    def __init__(self,a:float,b:float,coeffs:np.ndarray,) -> None:
+    def __init__(self,a:float,b:float,coeffs:np.ndarray,separator:ConcatenatedVectorSeparator = EmptySeparator()) -> None:
         Interval.__init__(self,a,b)
         ChebyshevCoeffs.__init__(self,coeffs)
         self.degree = coeffs.shape[0]        
         self.coeffs = coeffs.reshape([self.degree,-1])
+        self.separator = separator
     def to_ChebyshevCoeffs(self,):
         chebcoeff = ChebyshevCoeffs.__new__(ChebyshevCoeffs,)
         chebcoeff.coeffs = self.coeffs
@@ -36,7 +37,7 @@ class ChebyshevInterval(Interval,ChebyshevCoeffs):
     @classmethod
     def from_function(cls,fun:FlatListOfFuns,degree:int, x0:float,x1:float,):
         coeffs = coeffgen(fun,degree-1,outbounds=(x0,x1))
-        return ChebyshevInterval(x0,x1,coeffs,)
+        return ChebyshevInterval(x0,x1,coeffs,separator=fun.separator)
     def left_value(self,):
         return coeffevl(-1,self.coeffs)    
     def right_value(self,):
@@ -44,8 +45,11 @@ class ChebyshevInterval(Interval,ChebyshevCoeffs):
     def __call__(self,x:NumericType):
         xhat = self.normalize(x)
         return coeffevl(xhat,self.coeffs)    
-    def separate_funs(self,fun:FlatListOfFuns):
-        coeffss = fun.separate_vector(self.coeffs.reshape([self.degree,-1]),axis = 1)
+    def separate_funs(self,):
+        if isinstance(self.separator,EmptySeparator):
+            logging.error(f'No separator assigned!')
+            raise Exception
+        coeffss = self.separator(self.coeffs.reshape([self.degree,-1]),axis = 1)
         return tuple(ChebyshevInterval(*self.interval,coeffs) for coeffs in coeffss)
         
     def bisect(self,fun:FlatListOfFuns):
@@ -107,12 +111,19 @@ class EdgeValues:
         
 class GridwiseChebyshev(Grid):
     cheblist :List[ChebyshevInterval]
-    def __init__(self,fun:FlatListOfFuns,x0:float= 0,x1:float = 1) -> None:
+    def __init__(self,fun:FlatListOfFuns,x0:float= 0,x1:float = 1) -> None:        
         super().__init__(x0,x1)
         self.cheblist = []
         self.edge_values = EdgeValues(self.cheblist,)
         self.edge_values.set_up_to_date(False)
         self.fun = fun
+        self.separator = fun.separator
+    @classmethod
+    def from_single_chebyshev(self,fun:FlatListOfFuns,chebint:ChebyshevInterval):
+        gcheb = GridwiseChebyshev(fun,x0 = chebint.interval[0],x1 = chebint.interval[1])
+        gcheb.cheblist.append(chebint)
+        return gcheb
+        
     @classmethod
     def from_function(cls, fun:FlatListOfFuns,degree:int ,x0:float,x1:float,):
         cint = ChebyshevInterval.from_function(fun,degree,x0,x1)
@@ -141,6 +152,17 @@ class GridwiseChebyshev(Grid):
             ys.append(y)
         ys = np.stack(ys,axis = 0)
         return ys
+    def iterate_edge_values(self,):
+        for i in range(len(self.edges)):
+            lef = self.edge_values.get_interval_edge(i,left= True,)
+            rig = self.edge_values.get_interval_edge(i,right = True)
+            if i == 0:
+                cntint = (0,)
+            elif i == len(self.edges) -1:
+                cntint = (i-1,)
+            else:
+                cntint = (i-1,i)
+            yield lef,rig,cntint
     def __str__(self,):
         return f'# of intervals = {len(self.cheblist)} with (max,min) separations = {np.amax(self.hs),np.amin(self.hs)}'
     def update_edge_values(self,head_edge:np.ndarray= np.empty(0,),tail_edge:np.ndarray = np.empty(0,)):
@@ -165,5 +187,7 @@ class GridwiseChebyshev(Grid):
         gg.fun = self
         gg.edges = self.edges
         gg.edge_values = EdgeValues(new_cheblist,head_edge=head_edge,tail_edge=tail_edge)
+        gg.edge_values.set_up_to_date(True)
         return gg
+    # def create_child(self,):
         

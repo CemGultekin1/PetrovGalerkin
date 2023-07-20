@@ -1,4 +1,4 @@
-from typing import  Generator, List
+from typing import  Callable, Dict, Generator, List
 from .interval import GridwiseChebyshev,ChebyshevInterval
 from .funs import FlatListOfFuns
 from .interpolate import ErrorEstimator
@@ -49,7 +49,8 @@ class ErrorControl(RepresentationControl):
     def __init__(self, min_degree: int, max_degree: int,max_abs_err:float = 1e-3) -> None:
         self.errest = ErrorEstimator(min_degree,max_degree)
         self.max_abs_err = max_abs_err
-    def refinement_score(self,errs:List[float],):
+    def refinement_score(self,gcheb:GridwiseChebyshev,):
+        errs = self.test(gcheb)
         errs = np.array(errs)
         errs = np.where(errs < self.max_abs_err,0,errs)
         return errs
@@ -60,9 +61,8 @@ class ErrorControl(RepresentationControl):
         return errs
     def test_interval(self,chebint:ChebyshevInterval,fun:FlatListOfFuns)->float:
         return self.errest.evaluate(chebint.coeffs,fun,chebint.interval)
-    def create_refinements(self,gcheb:GridwiseChebyshev,):
-        errs = self.test(gcheb)
-        scr = self.refinement_score(errs)
+    def create_refinements(self,gcheb:GridwiseChebyshev,):        
+        scr = self.refinement_score(gcheb)
         return RefinementRanking(scr)
 
 class IntervalNumberControl(RepresentationControl):
@@ -90,9 +90,9 @@ class RefinementTask:
     def __init__(self,gcheb:GridwiseChebyshev,interval_id:int) -> None:
         self.gridcheb = gcheb
         self.current_interval_id = interval_id
-
-
-class RefinementScheme:
+        
+    
+class RepresetationRefinementScheme:
     def __init__(self,errc:ErrorControl,inc:IntervalNumberControl,grc:GridRegularityControl,max_num_cycles:int = 5) -> None:
         self.error_control = errc
         self.interval_number_control = inc
@@ -121,22 +121,17 @@ class RefinementScheme:
         logging.debug(f'Grid regularity control: \t\t{str(rt)}')
         for ii in rt.iterate_refinement_needing():
             yield RefinementTask(gcheb,ii)
-            
-class Refiner:
-    def __init__(self,gcheb:GridwiseChebyshev,rs:RefinementScheme) -> None:
-        self.grid_cheb = gcheb
-        self.refinement_scheme = rs
-    def inter_step(self,):
+    def inter_step(self,gcheb:GridwiseChebyshev):
         cy0 = 0
-        for cy,rt in self.refinement_scheme.run_cycles(self.grid_cheb):
+        for cy,rt in self.run_cycles(gcheb):
             
             if cy > cy0:
                 cy0 = cy
-                yield cy,self.grid_cheb
+                yield cy,gcheb
             self.run_refinement(rt)
-        yield cy0,self.grid_cheb
-    def run(self,):
-        for _,rt in self.refinement_scheme.run_cycles(self.grid_cheb):
+        yield cy0,gcheb
+    def run(self,gcheb:GridwiseChebyshev):
+        for _,rt in self.run_cycles(gcheb):
             self.run_refinement(rt)
     def run_refinement(self,rt:RefinementTask):
         gcheb = rt.gridcheb
@@ -144,3 +139,58 @@ class Refiner:
         gcheb.refine(intid)
         
         
+control = 'control'
+merger = 'merger'
+class CustomRefiner:
+    def __init__(self,) -> None:
+        self.counter = 0
+        self.controls  = {}
+        self.scrs = {}
+    def add_control(self,cntrlfun:Callable[[GridwiseChebyshev],np.ndarray],name:str):
+        self.controls[self.counter] = (cntrlfun,name,control)
+        self.counter+=1
+    def add_merger(self,mergerfun:Callable[[GridwiseChebyshev,Dict[str,np.ndarray]],np.ndarray],name:str):
+        self.controls[self.counter] = (mergerfun,name,merger)
+        self.counter+=1
+    def run_controls(self,gcheb:GridwiseChebyshev):
+        scrs = {}
+        for fun,name,tag in self.controls.values():
+            if tag == control:
+                scrs[name] = fun(gcheb)
+            elif tag == merger:
+                scrs[name] = fun(gcheb,**scrs)
+            else:
+                raise Exception
+        self.scrs = scrs
+        return not self.is_refinement_needed()
+    # def refine(self,gcheb:GridwiseChebyshev,):
+    #     self.run_controls(gcheb)
+    #     self.run_refinements(gcheb,)
+    #     return gcheb
+    @property
+    def final_score(self,):
+        if not bool(self.scrs):
+            return -np.ones(1)*np.inf
+        last_key = list(self.scrs.keys())[-1]
+        return self.scrs[last_key]
+    def is_refinement_needed(self,):
+        fscr = self.final_score
+        if np.all(fscr <= 0):
+            return False
+        return True
+            
+    def run_refinements(self,gcheb:GridwiseChebyshev,):
+        if not self.is_refinement_needed():
+            return gcheb
+        scrs = self.final_score
+        scris = np.argsort(scrs)[::-1]
+        intervals =scris.copy()
+        scrs = scrs[scris]
+        for i,scr in enumerate(scrs):
+            if scr <= 0:
+                continue
+            gcheb.refine(intervals[i])
+            intervals+=np.where(intervals>intervals[i],1,0)
+        self.scrs = {}
+        return gcheb
+            

@@ -9,15 +9,12 @@ def integmat():
 
 
 def tricol(ravg:float= 1/2,lavg:float= 1/2):
-    # print(f'left_edge = {left_edge},\t right_edge = {right_edge} ')
     vals = valuemat()
     ints = integmat()
     center = np.zeros((2,2))
     left = np.zeros((2,2))
     right = np.zeros((2,2))
     for i,j in itertools.product(*[range(2)]*2):
-        # rcoeff  = 1 if right_edge else 1/2
-        # lcoeff = 1 if left_edge else 1/2
         vu = vals[i,1]*vals[j,1]*ravg - vals[i,0]*vals[j,0]*lavg
         dvu =  ints[i,j]
         print(f'center[{i,j}] = vu - dvu = {vu} - {dvu}')
@@ -107,14 +104,8 @@ def main():
     rhs = build_rhs(n)
     rhs = add_axiliary_rhs(rhs,c)
     
-    # x = x[:-1,:-1]
-    # rhs = rhs[:-1]
-    # x[-2:,0] = 1/2,1/2
     print(x)
     print(rhs)
-    # rhs = build_rhs(n)
-    # print(x)
-    # print(rhs)
 
    
 

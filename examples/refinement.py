@@ -3,6 +3,7 @@ import numpy as np
 from solver.core import BoundaryCondition
 from solver.glbsys import SparseGlobalSystem,GlobalSysAllocator
 from solver.eqgen import LocalEquationFactory
+from solver.errcontrol import ControlRefinement
 from solver.linsolve import GlobalSystemSolver
 from chebyshev import ListOfFuns,GridwiseChebyshev,NumericType
 import logging
@@ -26,19 +27,37 @@ def main():
     np.random.seed(0)
     bcond = BoundaryCondition(np.eye(dim),np.random.randn(dim,dim)*0,np.random.randn(dim,)*0 + 1)
 
+    # solver preparation
     leqf= LocalEquationFactory(dim,max_degree,bcond)
     nags = GlobalSysAllocator(dim,leqf)
+    cntrlref = ControlRefinement()
+    
+    #plotter
+    foldername = OutputsFolders().from_file_name(__file__).create().to_str()
+    filename = lambda iternum : f'solution-{iternum+1}.png'
+    gcp = GridwiseChebyshevPlotter()
+    
+    
+    for iternum in range(12):
+        # solution
+        blocks = nags.create_blocks(gcheb)
+        sgs = SparseGlobalSystem(blocks)
+        gss = GlobalSystemSolver(sgs)
+        gss.solve()
+        solution = gss.get_wrapped_solution(gcheb)
+        logging.info(f'({iternum}):\t hmin = {np.amin(gcheb.hs)}')
 
-    blocks = nags.create_blocks(gcheb)
-    sgs = SparseGlobalSystem(blocks)
+        fig = gcp.draw(solution)
+        fig.savefig(os.path.join(foldername,filename(iternum)))
+        plt.close()
+        done_flag = cntrlref.run_controls(solution)
+        
+        
+        if done_flag:
+            break
+        gcheb = cntrlref.run_refinements(gcheb)
     
-    
-    
-    gss = GlobalSystemSolver(sgs)
-    gss.solve()
-
-    solution = gss.get_wrapped_solution(gcheb)
-    logging.debug(f'solution.ps = {solution.ps}, solution.hs = {solution.hs}')
+    return
     
     printer = MatPrinter(width=4,decimals=3)
     matstr = printer.to_str(gss.mat.toarray())
@@ -47,18 +66,9 @@ def main():
     logging.debug(f'\n\nmat = \n{matstr}\n\n rhs = \n{rhsstr},\n\n sol = \n{solstr}')
    
 
-    plt.spy(sgs.mat,markersize=1)
-    folder = OutputsFolders().from_file_name(__file__).create().to_str()
-    plt.savefig(os.path.join(folder,'spy.png'))
-    plt.close()
     
     
-    foldername = OutputsFolders().from_file_name(__file__).create().to_str()
-    filename = 'solution.png'
     
-    gcp = GridwiseChebyshevPlotter()
-    fig = gcp.draw(solution)
-    fig.savefig(os.path.join(foldername,filename))
     
 if __name__== '__main__':
     main()

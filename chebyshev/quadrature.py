@@ -13,18 +13,26 @@ def quadfun(*degrees:int, first_derivative:bool = False):
     yint = cheb.chebint(y)
     return cheb.chebval(1,yint) - cheb.chebval(-1,yint)
     
-
-class QuadratureTensor(Degree):
+class InnerProducts(Degree):
+    def __init__(self,degree:int) -> None:
+        super().__init__(degree)
+        self.dub_quads = np.empty((self.degree,self.degree,),dtype = float)
+        self.filledup = False
+    def fillup(self,):
+        for i,j in self.degree_index_product(2):
+            self.dub_quads[i,j] = quadfun(i,j)
+        self.filledup = True
+        
+class QuadratureTensor(InnerProducts):
     def __init__(self,degree:int) -> None:
         super().__init__(degree)
         self.tri_quads = np.empty((self.degree,self.degree,self.degree),dtype = float)
         self.der_dub_quads = np.empty((self.degree,self.degree,),dtype = float)
-        self.dub_quads = np.empty((self.degree,self.degree,),dtype = float)
         self.filledup = False
     def fillup(self,):
+        super().fillup()
         for i,j,k in self.degree_index_product(3):
             self.tri_quads[i,j,k] = -quadfun(i,j,k)
         for i,j in self.degree_index_product(2):
-            self.dub_quads[i,j] = quadfun(i,j)
             self.der_dub_quads[i,j] = -quadfun(i,j,first_derivative=True)
         self.filledup = True

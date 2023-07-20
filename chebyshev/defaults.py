@@ -1,4 +1,4 @@
-from .refinement import ErrorControl,IntervalNumberControl,GridRegularityControl,RefinementScheme
+from .refinement import ErrorControl,IntervalNumberControl,GridRegularityControl,RepresetationRefinementScheme
 
 
 
@@ -14,6 +14,6 @@ max_num_cycles_per_ref = 2**4
 error_control = ErrorControl(min_deg,max_deg,max_abs_err=max_abs_err)
 interval_number_control = IntervalNumberControl(max_ref_count_per_cycle,max_int_count)
 grid_regularity_control = GridRegularityControl(grid_condition_bound)
-refinement_scheme = RefinementScheme(error_control,\
+refinement_scheme = RepresetationRefinementScheme(error_control,\
                 interval_number_control,\
                 grid_regularity_control,max_num_cycles=max_num_cycles_per_ref)
