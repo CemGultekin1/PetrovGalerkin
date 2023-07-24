@@ -33,7 +33,7 @@ class GridwiseChebyshevPlotter:
     def __init__(self,per_interval_pts_num :int = 64,flux_sep:float = 0.05) -> None:
         self.per_interval_pts_num = per_interval_pts_num
         self.flux_sep = flux_sep
-    def draw(self,chebint:GridwiseChebyshev):
+    def draw(self,chebint:GridwiseChebyshev,):
         fig,axs = plt.subplots(1,1,figsize = (5,5))
         sep = np.amin(chebint.hs)
         fs = sep*self.flux_sep
@@ -58,4 +58,9 @@ class GridwiseChebyshevPlotter:
         for edge in edges:
             axs.plot([edge,edge], exts,'k--',linewidth= 1)
         axs.set_ylim(exts)
-        return fig
+        return fig,axs
+class MultiDimGridwiseChebyshevPlotter(GridwiseChebyshevPlotter):
+    def draw(self, chebint: GridwiseChebyshev):
+        dim = chebint.dim
+        for i in range(dim):
+            yield super().draw(chebint.separate_dims(dim,index = i))

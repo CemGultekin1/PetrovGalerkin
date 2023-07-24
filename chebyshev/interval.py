@@ -1,5 +1,5 @@
 import logging
-from typing import List
+from typing import List, Tuple
 import numpy as np
 from .interpolate import coeffevl,coeffgen
 from .funs import FlatListOfFuns,NumericType,ConcatenatedVectorSeparator,EmptySeparator
@@ -23,6 +23,8 @@ class ChebyshevCoeffs:
         self.coeffs = coeffs
     def __call__(self,x:NumericType):
         return coeffevl(x,self.coeffs)
+    
+
 class ChebyshevInterval(Interval,ChebyshevCoeffs):
     def __init__(self,a:float,b:float,coeffs:np.ndarray,separator:ConcatenatedVectorSeparator = EmptySeparator()) -> None:
         Interval.__init__(self,a,b)
@@ -47,11 +49,15 @@ class ChebyshevInterval(Interval,ChebyshevCoeffs):
         return coeffevl(xhat,self.coeffs)    
     def separate_funs(self,):
         if isinstance(self.separator,EmptySeparator):
+            
             logging.error(f'No separator assigned!')
             raise Exception
         coeffss = self.separator(self.coeffs.reshape([self.degree,-1]),axis = 1)
         return tuple(ChebyshevInterval(*self.interval,coeffs) for coeffs in coeffss)
-        
+    def separate_dims(self,splits:Tuple[int],index:int = 0 ):
+        spcoeffs = np.split(self.coeffs,splits,axis = 1)
+        coeffs = spcoeffs[index]
+        return self.new_by_coeff(coeffs)
     def bisect(self,fun:FlatListOfFuns):
         # logging.debug(f'Refining the interval {self.interval} into two pieces')
         int0,int1 = Interval.bisect(self,)
@@ -95,7 +101,7 @@ class EdgeValues:
             if x.size == 0:
                 edge_values[i] = edge_values[1]*0
 
-        edge_values = [ev.reshape([1,-1]) for ev in edge_values]
+        edge_values = [ev.flatten() for ev in edge_values]
         edge_values = np.stack(edge_values,axis = 0)
         edge_values = edge_values.reshape(edge_values.shape[0]//2,2,edge_values.shape[1]) # time x l/r x dim
         self.values = edge_values  
@@ -108,6 +114,12 @@ class EdgeValues:
                 raise Exception
         index = 0 if left else 1
         return self.values[edgenum,index]
+    def separate_dims(self,splitter:List[int],index:int = 0):
+        values = np.split(self.values,splitter,axis = 2)[index]
+        edgeval = EdgeValues.__new__(EdgeValues,)
+        edgeval.__dict__.update(self.__dict__)
+        edgeval.values = values
+        return edgeval
         
 class GridwiseChebyshev(Grid):
     cheblist :List[ChebyshevInterval]
@@ -118,6 +130,9 @@ class GridwiseChebyshev(Grid):
         self.edge_values.set_up_to_date(False)
         self.fun = fun
         self.separator = fun.separator
+    @property
+    def dim(self,):
+        return self.cheblist[0].coeffs.shape[1]
     @classmethod
     def from_single_chebyshev(self,fun:FlatListOfFuns,chebint:ChebyshevInterval):
         gcheb = GridwiseChebyshev(fun,x0 = chebint.interval[0],x1 = chebint.interval[1])
@@ -146,6 +161,9 @@ class GridwiseChebyshev(Grid):
         locs = self.loc(x)
         ys = []
         n = len(self.cheblist) - 1
+        if len(self.cheblist) == 1:
+            return self.cheblist[0](x)
+        
         for i,loc in enumerate(locs):
             loc = np.minimum(loc,n)
             y = self.cheblist[loc](x[i])
@@ -184,10 +202,36 @@ class GridwiseChebyshev(Grid):
             new_cheblist.append(chebint.new_by_coeff(coeffs))
         gg = GridwiseChebyshev.__new__(GridwiseChebyshev,)
         gg.cheblist = new_cheblist
-        gg.fun = self
+        gg.fun = None
         gg.edges = self.edges
         gg.edge_values = EdgeValues(new_cheblist,head_edge=head_edge,tail_edge=tail_edge)
         gg.edge_values.set_up_to_date(True)
         return gg
-    # def create_child(self,):
+    def separate_dims(self,splitter:List[int],index :int = 0):
+        sepchebs = []
+        for cheb in self.cheblist:
+            newcheb =cheb.separate_dims(splitter,index = index)
+            sepchebs.append(newcheb)
+            # logging.info(f' index = {index},\n coeffs = {newcheb.coeffs}')
+        gg = GridwiseChebyshev.__new__(GridwiseChebyshev,)
+        gg.cheblist = sepchebs
+        gg.fun = None
+        gg.edges = self.edges
+        gg.edge_values = self.edge_values.separate_dims(splitter,index = index)
+        return gg
+    @classmethod
+    def create_from_local_solution(cls,chebint:ChebyshevInterval,\
+                        interior_solution:np.ndarray,\
+                        edge_solution:np.ndarray,dim:int):
+        interior_solution = interior_solution.reshape([-1,dim])
+        per_int_solution = interior_solution
+        new_chebint = chebint.new_by_coeff(per_int_solution)
+        new_chebint.separator = None#chebint.separator
+        new_cheblist = [new_chebint]
+        gg = GridwiseChebyshev.__new__(GridwiseChebyshev,)
+        gg.cheblist = new_cheblist
+        gg.fun = chebint
+        gg.edges = list(chebint.interval)
+        gg.edge_values = EdgeValues([new_chebint],head_edge=edge_solution[0],tail_edge=edge_solution[1])
+        return gg
         

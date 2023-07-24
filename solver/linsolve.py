@@ -1,3 +1,5 @@
+import logging
+from typing import Tuple
 from scipy.sparse.linalg import spsolve
 import numpy as np
 from .glbsys import SparseGlobalSystem,DenseLocalSystem
@@ -19,4 +21,14 @@ class LocalSystemSolver(DenseLocalSystem):
         self.__dict__.update(spglblsys.__dict__)
         self.solution = np.empty(0)
     def solve(self,):
-        self.solution =  np.linalg.inv(self.mat)
+        if self.solution.size == 0:
+            self.solution =  -np.linalg.solve(self.mat,self.rhs)
+    @property
+    def interior_solution(self,):
+        if self.solution.size == 0:
+            logging.error('System is not solved yet')
+            raise Exception
+        return self.solution[self.dim:-self.dim,:]
+    @property
+    def edge_solution(self,)->Tuple[np.ndarray,np.ndarray]:
+        return self.solution[:self.dim,:],self.solution[-self.dim:,:]

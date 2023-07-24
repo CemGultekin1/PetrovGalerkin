@@ -2,7 +2,7 @@ import os
 import numpy as np
 from solver.core import BoundaryCondition
 from solver.glbsys import SparseGlobalSystem,GlobalSysAllocator
-from solver.eqgen import LocalEquationFactory
+from solver.eqgen import EquationFactory
 from solver.linsolve import GlobalSystemSolver
 from chebyshev import ListOfFuns,GridwiseChebyshev,NumericType
 import logging
@@ -15,18 +15,18 @@ logging.basicConfig(level=logging.INFO)
 
 dim = 1
 def matfun(x:NumericType):
-    return np.stack([np.cos((i*x/2)**2*np.pi) for i in range(dim**2)],axis = 1).reshape([-1,dim,dim])*0 - 10
+    return np.stack([np.cos((i*x/2)**2*np.pi) for i in range(dim**2)],axis = 1).reshape([-1,dim,dim])*0 - 10*0
 def rhsfun(x:NumericType):
     return np.stack([x**(i+1) for i in range(dim)],axis = 1).reshape([-1,dim])
 def main():    
     lof = ListOfFuns(matfun,rhsfun).flatten()
-    degree = 4
+    degree = 2
     max_degree = degree
     gcheb = GridwiseChebyshev.from_function(lof,degree,0,1)
     np.random.seed(0)
     bcond = BoundaryCondition(np.eye(dim),np.random.randn(dim,dim)*0,np.random.randn(dim,)*0 + 1)
 
-    leqf= LocalEquationFactory(dim,max_degree,bcond)
+    leqf= EquationFactory(dim,max_degree,bcond)
     nags = GlobalSysAllocator(dim,leqf)
 
     blocks = nags.create_blocks(gcheb)
@@ -38,13 +38,13 @@ def main():
     gss.solve()
 
     solution = gss.get_wrapped_solution(gcheb)
-    logging.debug(f'solution.ps = {solution.ps}, solution.hs = {solution.hs}')
+    logging.info(f'solution.ps = {solution.ps}, solution.hs = {solution.hs}')
     
     printer = MatPrinter(width=4,decimals=3)
     matstr = printer.to_str(gss.mat.toarray())
     rhsstr = printer.to_str(gss.rhs)
     solstr = printer.to_str(gss.solution)
-    logging.debug(f'\n\nmat = \n{matstr}\n\n rhs = \n{rhsstr},\n\n sol = \n{solstr}')
+    logging.info(f'\n\nmat = \n{matstr}\n\n rhs = \n{rhsstr},\n\n sol = \n{solstr}')
    
 
     plt.spy(sgs.mat,markersize=1)

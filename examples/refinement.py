@@ -2,7 +2,7 @@ import os
 import numpy as np
 from solver.core import BoundaryCondition
 from solver.glbsys import SparseGlobalSystem,GlobalSysAllocator
-from solver.eqgen import LocalEquationFactory
+from solver.eqgen import EquationFactory
 from solver.errcontrol import ControlRefinement
 from solver.linsolve import GlobalSystemSolver
 from chebyshev import ListOfFuns,GridwiseChebyshev,NumericType
@@ -28,7 +28,7 @@ def main():
     bcond = BoundaryCondition(np.eye(dim),np.random.randn(dim,dim)*0,np.random.randn(dim,)*0 + 1)
 
     # solver preparation
-    leqf= LocalEquationFactory(dim,max_degree,bcond)
+    leqf= EquationFactory(dim,max_degree,bcond)
     nags = GlobalSysAllocator(dim,leqf)
     cntrlref = ControlRefinement()
     

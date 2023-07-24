@@ -1,4 +1,4 @@
-from .interval import GridwiseChebyshev,ChebyshevInterval
+from .interval import GridwiseChebyshev,ChebyshevInterval,coeffevl
 from .funs import NumericFunType,ListOfFuns,FlatListOfFuns,NumericType
 from .interpolate import ErrorEstimator
 from .boundary import Value,Boundary,degree_mat_multip

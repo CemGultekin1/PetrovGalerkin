@@ -2,12 +2,12 @@ import logging
 from .matalloc import BlockedMatrixFrame
 import numpy as np
 from scipy.sparse import lil_matrix
-from .eqgen import LocalEquationFactory
+from .eqgen import EquationFactory
 from .matalloc import BlockedMatrixFrame
 from chebyshev import GridwiseChebyshev
 
 class GlobalSysAllocator:
-    def __init__(self,dim:int,lcleq:LocalEquationFactory) -> None:
+    def __init__(self,dim:int,lcleq:EquationFactory) -> None:
         self.local_equation = lcleq
         self.dim = dim
     def create_blocks(self,gridwise:GridwiseChebyshev):
@@ -83,8 +83,10 @@ class SparseGlobalSystem:
             
 class DenseLocalSystem(SparseGlobalSystem):
     mat:np.ndarray
-    def __init__(self,blocks:BlockedMatrixFrame) -> None:
+    rhs:np.ndarray
+    def __init__(self,blocks:BlockedMatrixFrame,rhs:np.ndarray) -> None:
         self.dim = blocks.dim
+        self.rhs = rhs
         mat = np.zeros(blocks.mat_shape)
         for blk in blocks.mat_blocks:
             logging.debug(f'blk.slicetpl = {blk.slicetpl},mat.shape = {mat.shape},blk.matblock.shape = {blk.matblock.shape}')

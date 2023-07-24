@@ -2,9 +2,9 @@ from .core import BoundaryCondition
 from .matalloc import BlockColumns, TriRowColumn
 from .boundary import BoundaryElementFactory
 from .interior import InteriorElementFactory
-from chebyshev import FlatListOfFuns,ChebyshevInterval
+from chebyshev import ChebyshevInterval
 
-class LocalEquationFactory:
+class EquationFactory:
     def __init__(self,dim:int,max_degree:int,boundary_condition:BoundaryCondition) -> None:        
         self.dim = dim
         self.interr = InteriorElementFactory(max_degree)
@@ -12,8 +12,8 @@ class LocalEquationFactory:
         self.bndr = BoundaryElementFactory(max_degree)        
         self.bndr.fillup()
         self.bndr_cond = self.bndr.create_boundary_condition_element_factory(boundary_condition)
-    def change_boundary_condition(self,bcond:BoundaryCondition)->'LocalEquationFactory':
-        lef = LocalEquationFactory.__new__(LocalEquationFactory)
+    def change_boundary_condition(self,bcond:BoundaryCondition)->'EquationFactory':
+        lef = EquationFactory.__new__(EquationFactory)
         lef.__dict__.update(self.__dict__)
         lef.bndr_cond = self.bndr.create_boundary_condition_element_factory(bcond)
         return lef
