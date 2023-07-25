@@ -1,6 +1,6 @@
 import os
 import numpy as np
-from solver.core import BoundaryCondition
+from solver.bndrcond import BoundaryCondition
 from solver.glbsys import DenseLocalSystem
 from solver.eqgen import EquationFactory
 from solver.lclsolve import LocalSysAllocator
@@ -11,20 +11,21 @@ import matplotlib.pyplot as plt
 from examples.nprint import MatPrinter
 from examples.plotter import GridwiseChebyshevPlotter, MultiDimGridwiseChebyshevPlotter
 from fldrsys.folders import OutputsFolders
-from solver.lcl2err import ResidualFunction
+from solver.lclerr import ResidualFunction,OrthogonalResidueNorm
 logging.basicConfig(level=logging.INFO)
 
 
 dim = 1
 def matfun(x:NumericType):
-    return np.stack([np.cos((i*x/2)**2*np.pi) for i in range(dim**2)],axis = 1).reshape([-1,dim,dim])*0- 1
+    return np.stack([np.cos((i*x/2)**2*np.pi) for i in range(dim**2)],axis = 1).reshape([-1,dim,dim])- 10
 def rhsfun(x:NumericType):
     return np.stack([x**(i+1) for i in range(dim)],axis = 1).reshape([-1,dim])
 def main():    
     lof = ListOfFuns(matfun,rhsfun).flatten()
-    degree = 4
+    degree = 8
     max_degree = degree
-    gcheb = GridwiseChebyshev.from_function(lof,degree,0,1)
+    x1 = 1#./2**3
+    gcheb = GridwiseChebyshev.from_function(lof,degree,0,x1)
     np.random.seed(0)
     bcond = BoundaryCondition(np.eye(dim),np.random.randn(dim,dim)*0,np.random.randn(dim,)*0 + 1)
 
@@ -36,14 +37,14 @@ def main():
     sgs = DenseLocalSystem(blocks,rhs)
     printer = MatPrinter(width=4,decimals=3)
     matstr = printer.to_str(sgs.mat)
-    logging.info(f'\n\n mat = \n {matstr}')
+    logging.debug(f'\n\n mat = \n {matstr}')
     lss = LocalSystemSolver(sgs)
     lss.solve()
     
-    logging.info(f'\n\n lss.solution =\n\n{printer.to_str(lss.solution)}')
+    logging.debug(f'\n\n lss.solution =\n\n{printer.to_str(lss.solution)}')
     
-    degree = lclcheb.degree
-    solution = GridwiseChebyshev.create_from_local_solution(lclcheb,lss.interior_solution,lss.edge_solution,dim**2*degree)
+
+    solution = GridwiseChebyshev.create_from_local_solution(lclcheb,lss.interior_solution,lss.edge_solution,dim**2)
     
     foldername = OutputsFolders().from_file_name(__file__).create().to_str()    
     
@@ -55,10 +56,10 @@ def main():
         plt.close()
     
     # return
-    rf = ResidualFunction(dim,lclcheb,lss)
+    res = ResidualFunction(dim,lclcheb,lss)
 
-    xs= np.linspace(1e-3,1-1e-3,100)
-    ys = rf(xs)
+    xs= np.linspace(0,1,100)
+    ys = res(xs)
     print(ys.shape)
     print(xs.shape)
     ys = ys.reshape(len(xs),-1)
@@ -67,8 +68,11 @@ def main():
         folder = OutputsFolders().from_file_name(__file__).create().to_str()
         plt.savefig(os.path.join(folder,f'res-{i}.png'))
         plt.close()
-    return
-    
+
+    orthresnorm = OrthogonalResidueNorm(degree)
+    orthnorm = orthresnorm.orthogonal_norm(res,lclcheb.degree)
+    logging.debug(f'orthnorm = {orthnorm}')
+    return 
     
     gss = GlobalSystemSolver(sgs)
     gss.solve()

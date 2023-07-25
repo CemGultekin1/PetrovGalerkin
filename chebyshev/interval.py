@@ -64,6 +64,10 @@ class ChebyshevInterval(Interval,ChebyshevCoeffs):
         cint0 = ChebyshevInterval.from_function(fun,self.degree,*int0.interval)
         cint1 = ChebyshevInterval.from_function(fun,self.degree,*int1.interval)
         return cint0,cint1
+    def change_degree(self,fun:FlatListOfFuns,degree:int):
+        coeffs = coeffgen(fun,degree-1,outbounds=self.interval)
+        self.coeffs = coeffs
+        self.degree = degree
     def new_by_coeff(self,coeffs:np.ndarray):
         coeffs = coeffs.reshape([self.degree,-1])
         return ChebyshevInterval(*self.interval,coeffs)
@@ -80,11 +84,19 @@ class Grid(Interval):
             return (location,)
         else:
             logging.error(f'The input {x} is neither scalar nor np.ndarray')
+    @property
+    def conds(self,):
+        return np.array(self.edges)/np.amin(self.edges)
+    @property
+    def condition_number(self,):
+        return np.amax(self.conds)
     def refine(self,i:int):
         a,b = self.edges[i],self.edges[i+1]
         m = (a+b)/2
         self.edges = self.edges[:i] + [a,m,b] + self.edges[i+2:]
-
+    @property
+    def num_interval(self,):
+        return len(self.edges) -1
 class EdgeValues:
     def __init__(self,cheblist:List[ChebyshevInterval],head_edge:np.ndarray = np.empty(0),tail_edge:np.ndarray = np.empty(0)):
         self.values = np.empty((0,2,0))
@@ -130,6 +142,7 @@ class GridwiseChebyshev(Grid):
         self.edge_values.set_up_to_date(False)
         self.fun = fun
         self.separator = fun.separator
+    
     @property
     def dim(self,):
         return self.cheblist[0].coeffs.shape[1]
@@ -146,17 +159,22 @@ class GridwiseChebyshev(Grid):
         cints.cheblist.append(cint)
         return cints
     @property
-    def hs(self,)->List[float]:
-        return [cint.h for cint in self.cheblist]
+    def hs(self,)->np.ndarray:
+        return np.array([cint.h for cint in self.cheblist])
     @property
     def ps(self,)->List[int]:
         return [cint.degree for cint in self.cheblist]
+    def __getitem__(self,i:int)->ChebyshevInterval:
+        return self.cheblist[i]
     def refine(self,i:int):
         super().refine(i)
         ci = self.cheblist[i]
         ci0,ci1 = ci.bisect(self.fun)
         self.cheblist = self.cheblist[:i] +[ci0,ci1] + self.cheblist[i+1:]
         self.edge_values.set_up_to_date(False)
+    def change_degree(self,i:int,degree:int):
+        chebint = self[i]
+        chebint.change_degree(self.fun,degree)
     def __call__(self,x:NumericType):
         locs = self.loc(x)
         ys = []
@@ -183,11 +201,12 @@ class GridwiseChebyshev(Grid):
             yield lef,rig,cntint
     def __str__(self,):
         return f'# of intervals = {len(self.cheblist)} with (max,min) separations = {np.amax(self.hs),np.amin(self.hs)}'
-    def update_edge_values(self,head_edge:np.ndarray= np.empty(0,),tail_edge:np.ndarray = np.empty(0,)):
-        if head_edge.size == 0 or tail_edge.size == 0: 
+    def update_edge_values(self,head_edge:np.ndarray= np.empty(0,),tail_edge:np.ndarray = np.empty(0,),old_head_tail:bool = False):
+        if old_head_tail: 
             head_edge = self.edge_values.get_interval_edge(0,left = True,even_if_not_up_to_date=True)
             tail_edge = self.edge_values.get_interval_edge(-1,right = True,even_if_not_up_to_date=True)        
         self.edge_values = EdgeValues(self.cheblist,head_edge=head_edge,tail_edge=tail_edge)
+        self.edge_values.set_up_to_date(True)
     def create_from_solution(self,solution:np.ndarray,dim:int):
         solution = solution.reshape([-1,dim])
         head_edge = solution[0]
@@ -208,16 +227,19 @@ class GridwiseChebyshev(Grid):
         gg.edge_values.set_up_to_date(True)
         return gg
     def separate_dims(self,splitter:List[int],index :int = 0):
+        logging.debug(f'splitter:List[int] = {splitter},index :int = {index}')
         sepchebs = []
+        logging.debug(f'\t\t before: n intervals = {self.num_interval}')
         for cheb in self.cheblist:
             newcheb =cheb.separate_dims(splitter,index = index)
             sepchebs.append(newcheb)
-            # logging.info(f' index = {index},\n coeffs = {newcheb.coeffs}')
+            logging.debug(f' index = {index},\n coeffs = {newcheb.coeffs}')
         gg = GridwiseChebyshev.__new__(GridwiseChebyshev,)
         gg.cheblist = sepchebs
         gg.fun = None
         gg.edges = self.edges
         gg.edge_values = self.edge_values.separate_dims(splitter,index = index)
+        logging.debug(f'\t\t after : n intervals = {gg.num_interval}')
         return gg
     @classmethod
     def create_from_local_solution(cls,chebint:ChebyshevInterval,\

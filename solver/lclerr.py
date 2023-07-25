@@ -1,8 +1,14 @@
-import logging
 from .linsolve import LocalSystemSolver
 import numpy as np
-from chebyshev import NumericType,coeffevl,GridwiseChebyshev,ChebyshevInterval
+from chebyshev import NumericType,coeffevl,GridwiseChebyshev,ChebyshevInterval,coeffgen,ResidualNorm
 import numpy.polynomial.chebyshev as cheb
+from .eqgen import EquationFactory
+from .lclsolve import LocalSysAllocator
+from chebyshev import GridwiseChebyshev,ChebyshevInterval
+from .glbsys import DenseLocalSystem
+from .linsolve import LocalSystemSolver
+
+
 '''
 Given v that solves
 <U,L*v> = u
@@ -67,24 +73,42 @@ class ResidualFunction:
         self.h = chebint.h
         self.interval = chebint.interval
     def __call__(self,x:NumericType):
-        mat = self.matfun(x)
-        sltn = self.solution(x) # t x d x deg * d
-        mat = mat.reshape([len(x),self.dim,self.dim]).transpose(0,2,1) # t x d x d
-        sltn = sltn.reshape(len(x),self.dim,self.degree*self.dim) # t x d x deg*d
-        # ATv = np.tensordot(mat,sltn,axes = (2,1)) # t x d x deg*d
-        ATv = np.matmul(mat,sltn)
-        # logging.info(f'ATv.shape = {ATv.shape}')
-        ucoeff = np.eye(self.degree)
+        mat :np.ndarray= self.matfun(x)
+        sltn:np.ndarray= self.solution(x) # t x d x deg * d
+        mat = mat.reshape(len(x),self.dim,self.dim).transpose(0,2,1) # t x d x d
+        sltn = sltn.reshape(len(x),self.dim,1) # t x d
+        negATv = np.matmul(mat,sltn)
         a,b = self.interval
-        xhat = (x - a)/(b-a)*2 - 1
-        
+        xhat = (x - a)/(b-a)*2 - 1        
         dv = cheb.chebder(self.solution.cheblist[0].coeffs)*2/self.h
-        ucoeff[:-1,:] += dv
-        dvpu :np.ndarray= coeffevl(xhat,ucoeff) # t x deg
-        dvpu = dvpu.reshape([len(x),1,-1,1])*np.eye(self.dim).reshape([1,self.dim,1,self.dim])
-        dvpu = dvpu.reshape([len(x),self.dim,self.degree*self.dim])        
-        dv = coeffevl(x,dv).reshape([-1,self.dim,self.degree*self.dim]) # t x d x deg*d
-        r = - dvpu + ATv 
+        dv :np.ndarray= coeffevl(xhat,dv) # t x dim
+        dv = dv.reshape(len(x),self.dim,1)
+        r = - dv + negATv 
         return r
+                
+class OrthogonalResidueNorm:
+    def __init__(self,maxdegree:int,) -> None:
+        self.degree = maxdegree
+        self.resnorm = ResidualNorm(self.degree)
+        self.resnorm.fillup()
+    def orthogonal_norm(self,res:ResidualFunction,degree:int):
+        return self.resnorm.residual_norm_from_fun(res,res.interval,degree = degree)
         
-        
+
+
+class LocalErrorEstimate:
+    def __init__(self,dim:int,equfact:EquationFactory) -> None:
+        self.dim = dim
+        self.lcl_sys_alloc = LocalSysAllocator(dim,equfact)
+        self.orth_res_norm = OrthogonalResidueNorm(equfact.max_degree)
+    def interval_error(self,lclcheb:ChebyshevInterval):
+        blocks,rhs = self.lcl_sys_alloc.get_single_interval_blocks(lclcheb)
+        sgs = DenseLocalSystem(blocks,rhs)
+        lss = LocalSystemSolver(sgs)
+        lss.solve()
+        res = ResidualFunction(self.dim,lclcheb,lss)
+        orthnorm = self.orth_res_norm.orthogonal_norm(res,lclcheb.degree)
+        return orthnorm*lclcheb.h/2
+
+
+

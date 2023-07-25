@@ -1,4 +1,4 @@
-from .core import BoundaryCondition
+from .bndrcond import BoundaryCondition
 from .matalloc import BlockColumns, TriRowColumn
 from .boundary import BoundaryElementFactory
 from .interior import InteriorElementFactory
@@ -7,6 +7,7 @@ from chebyshev import ChebyshevInterval
 class EquationFactory:
     def __init__(self,dim:int,max_degree:int,boundary_condition:BoundaryCondition) -> None:        
         self.dim = dim
+        self.max_degree = max_degree
         self.interr = InteriorElementFactory(max_degree)
         self.interr.fillup()
         self.bndr = BoundaryElementFactory(max_degree)        

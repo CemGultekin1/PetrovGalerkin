@@ -1,6 +1,6 @@
 import os
 import numpy as np
-from solver.core import BoundaryCondition
+from solver.bndrcond import BoundaryCondition
 from solver.glbsys import SparseGlobalSystem,GlobalSysAllocator
 from solver.eqgen import EquationFactory
 from solver.errcontrol import ControlRefinement
@@ -45,7 +45,7 @@ def main():
         gss = GlobalSystemSolver(sgs)
         gss.solve()
         solution = gss.get_wrapped_solution(gcheb)
-        logging.info(f'({iternum}):\t hmin = {np.amin(gcheb.hs)}')
+        logging.debug(f'({iternum}):\t hmin = {np.amin(gcheb.hs)}')
 
         fig = gcp.draw(solution)
         fig.savefig(os.path.join(foldername,filename(iternum)))

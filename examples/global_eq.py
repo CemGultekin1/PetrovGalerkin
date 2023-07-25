@@ -1,6 +1,6 @@
 import os
 import numpy as np
-from solver.core import BoundaryCondition
+from solver.bndrcond import BoundaryCondition
 from solver.glbsys import SparseGlobalSystem,GlobalSysAllocator
 from solver.eqgen import EquationFactory
 from solver.linsolve import GlobalSystemSolver
@@ -38,13 +38,13 @@ def main():
     gss.solve()
 
     solution = gss.get_wrapped_solution(gcheb)
-    logging.info(f'solution.ps = {solution.ps}, solution.hs = {solution.hs}')
+    logging.debug(f'solution.ps = {solution.ps}, solution.hs = {solution.hs}')
     
     printer = MatPrinter(width=4,decimals=3)
     matstr = printer.to_str(gss.mat.toarray())
     rhsstr = printer.to_str(gss.rhs)
     solstr = printer.to_str(gss.solution)
-    logging.info(f'\n\nmat = \n{matstr}\n\n rhs = \n{rhsstr},\n\n sol = \n{solstr}')
+    logging.debug(f'\n\nmat = \n{matstr}\n\n rhs = \n{rhsstr},\n\n sol = \n{solstr}')
    
 
     plt.spy(sgs.mat,markersize=1)

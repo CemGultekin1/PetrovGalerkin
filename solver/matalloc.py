@@ -102,8 +102,8 @@ class BlockedMatrixFrame:
         h = mc.height
         prow,pcol = self.crc.neg2pos(*upper_left)
         matslctp = (slice(prow,prow +h),slice(pcol,pcol+w))
-        # logging.info(f'upper_left = {upper_left},\t colrow = {pcol,prow}')
-        # logging.info(f'rowslice = {matslctp[0].start,matslctp[0].stop},\t colslice = {matslctp[1].start,matslctp[1].stop}')
+        # logging.debug(f'upper_left = {upper_left},\t colrow = {pcol,prow}')
+        # logging.debug(f'rowslice = {matslctp[0].start,matslctp[0].stop},\t colslice = {matslctp[1].start,matslctp[1].stop}')
         ab = AllocatableBlock(mc.matclm,matslctp)
         self.mat_blocks.append(ab)
         if not rhs:

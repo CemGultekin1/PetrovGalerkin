@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 import numpy.polynomial.chebyshev as cheb
 import numpy as np
-from .core import BoundaryCondition
+from .bndrcond import BoundaryCondition
 from chebyshev import Value,Boundary,degree_mat_multip
                       
             
@@ -38,7 +38,7 @@ class BoundaryElementFactory(Boundary):
         fcross = self.right_cross[:degree3,:degree2]
         base = self.center[:degree2,:degree2]  
         # if degree2==2:
-        #     logging.info(f'Center = \n{base}')
+        #     logging.debug(f'Center = \n{base}')
         
         return BoundaryElement(bcross,base,fcross)
     def create_boundary_condition_element_factory(self,bc:BoundaryCondition,):

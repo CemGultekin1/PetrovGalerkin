@@ -94,9 +94,9 @@ coeffgen = IntervalBoundDecorator(ShapedCoefficients(cheb.chebinterpolate,leftha
 coeffevl = ShapedCoeffsEval(cheb.chebval,lefthanded=lefthanded)
 
 
-class ErrorEstimator(ChebyshevPointsCollection):
-    def __init__(self, min_degree: int, max_degree: int) -> None:
-        super().__init__(min_degree, max_degree + 1)
+class PtsWiseChebErr(ChebyshevPointsCollection):
+    def __init__(self, max_degree: int) -> None:
+        super().__init__(1, max_degree + 1)
     def evaluate(self,coeffs:np.ndarray, lofns:FlatListOfFuns,interval:Tuple[float,float])->float:
         deg = coeffs.shape[0] - 1
         pts_ = self[deg+1]

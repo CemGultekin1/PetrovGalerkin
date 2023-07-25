@@ -34,31 +34,8 @@ class BoundaryCondition:
     def dim(self,):
         return self.B0.shape[0]
 
-class LinearBoundaryProblem:
-    def __init__(self,\
-            funs:Tuple[NumericFunType,NumericFunType] = (),\
-            boundary_condition: Tuple[np.ndarray,np.ndarray] = (np.empty(0,),np.empty(0,)),\
-            boundaries :Tuple[float,float] = (0.,1.),) -> None:
-        self.matfun, self.rhsfun = funs
-        self.boundary_condition = BoundaryCondition(*boundary_condition)
-        self.boundaries = boundaries
-        self.dim = self.boundary_condition.dim
-    
-@dataclass
-class PetrovGalerkinSolverSettings:
-    max_element_num :int = int(2**8)
-    grid_regularity_bound :float = 64.
-    min_degree:int = 3
-    max_degree:int = 8
 
 
-class LinearSolver(LinearBoundaryProblem):
-    def __init__(self,pgs:PetrovGalerkinSolverSettings, lbp:LinearBoundaryProblem)-> None:
-        self.dim = lbp.dim
-        self.solver_setttings = pgs
-        self.__dict__.update(lbp.__dict__)        
-        self.listfuns = ListOfFuns(self.matfun,self.rhsfun)
-        self.flatlistfuns = self.listfuns.flatten()        
-        self.mergedfuns = GridwiseChebyshev(self.flatlistfuns,*lbp.boundaries)
+
         
         
