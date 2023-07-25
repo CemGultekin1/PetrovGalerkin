@@ -1,4 +1,5 @@
 import logging
+from typing import Tuple
 from .matalloc import BlockedMatrixFrame
 import numpy as np
 from scipy.sparse import lil_matrix
@@ -10,24 +11,24 @@ class GlobalSysAllocator:
     def __init__(self,dim:int,lcleq:EquationFactory) -> None:
         self.local_equation = lcleq
         self.dim = dim
-    def create_blocks(self,gridwise:GridwiseChebyshev):
-        ps = gridwise.ps
+    def create_blocks(self,gridwise:GridwiseChebyshev,target_degrees:Tuple[int,...]):
+        ps = target_degrees#gridwise.ps
         ncheb = len(ps)
         blocks = BlockedMatrixFrame(self.dim)
         if ncheb == 1:
-            bclm0 = self.local_equation.generate_interior_matrices(gridwise.cheblist[0],1,1)
+            bclm0 = self.local_equation.generate_interior_matrices(gridwise.cheblist[0],1,1,ps[0])
             bclm0.trim(left = True,right = True)
             blocks.add_tricolumn(bclm0)
         else:
-            bclm0 = self.local_equation.generate_interior_matrices(gridwise.cheblist[0],1,ps[1])
+            bclm0 = self.local_equation.generate_interior_matrices(gridwise.cheblist[0],1,ps[1],ps[0])
             bclm0.trim(left = True)
             blocks.add_tricolumn(bclm0)
             for i,chebint in zip(range(1,ncheb-1),gridwise.cheblist[1:-1]):
                 ldeg,rdeg = ps[i-1],ps[i+1]
-                bclm = self.local_equation.generate_interior_matrices(chebint,ldeg,rdeg)
+                bclm = self.local_equation.generate_interior_matrices(chebint,ldeg,rdeg,ps[i])
                 blocks.add_tricolumn(bclm)
         
-            bclm1 = self.local_equation.generate_interior_matrices(gridwise.cheblist[-1],ps[-2],1)
+            bclm1 = self.local_equation.generate_interior_matrices(gridwise.cheblist[-1],ps[-2],1,ps[-1])
             bclm1.trim(right = True)
             blocks.add_tricolumn(bclm1)
         

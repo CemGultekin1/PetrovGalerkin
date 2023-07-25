@@ -59,6 +59,7 @@ class RefinmentVec:
         for i in inds:
             self.last_ind = i+ self.offset
             yield self.last_ind
+        self.refresh()
         
 
 class Control:
@@ -71,7 +72,7 @@ class Control:
     @property
     def name(self,):
         return self.__class__.__name__
-    def __call__(self, gcheb:GridwiseChebyshev, rr: RefinementRanking):...
+    def __call__(self, rr: RefinementRanking,*gchebs:GridwiseChebyshev, ):...
     
 
 
@@ -82,7 +83,8 @@ class RepresentationErrorControl(Control):
         super().__init__(tol)
     def set_error_estimator(self,err_est:PtsWiseChebErr):
         self.err_est = err_est
-    def __call__(self,gcheb:GridwiseChebyshev,rr: RefinmentVec):
+    def __call__(self,rr: RefinmentVec,*gchebs:GridwiseChebyshev):
+        gcheb = gchebs[0]
         # rr.assign_refinement(errs >= self.tol,True)
         # np.random.seed(1)
         for i in rr.iterate_refs():
@@ -99,7 +101,8 @@ class RepresentationErrorControl(Control):
 
 class MaxNumIntervalControl(Control):
     tol:float = 1e2
-    def __call__(self,gcheb:GridwiseChebyshev,rr: RefinmentVec):
+    def __call__(self,rr: RefinmentVec,*gchebs:GridwiseChebyshev,):
+        gcheb = gchebs[0]
         num = gcheb.num_interval
         if num > self.tol:
             rr.kill_all_refinements()
@@ -117,7 +120,8 @@ class MaxNumIntervalControl(Control):
 
 class GridConditionControl(Control):
     tol :float = 50.
-    def __call__(self,gcheb:GridwiseChebyshev,ref:'CustomRefiner'):
+    def __call__(self,ref:RefinmentVec,*gchebs:GridwiseChebyshev):
+        gcheb = gchebs[0]
         refmask = ref.vec          
         hs = np.array(gcheb.hs)
         hs = np.where(refmask,hs/2,hs)
@@ -133,27 +137,36 @@ class CustomRefiner(RefinmentVec):
         self.degree_increments = degree_increments
         self.controls = [ccl(tol = cct) for ccl,cct in zip(self.control_cls_list,self.control_cls_tol)]
         super().__init__()
-    def run_controls(self,gcheb:GridwiseChebyshev):
-        self.init_vec(gcheb.num_interval)
+    def run_controls(self,*gchebs:GridwiseChebyshev):
+        self.init_vec(gchebs[0].num_interval)
         for cntrl in self.controls:
-            cntrl(gcheb,self)
+            cntrl(self,*gchebs)
         return self.is_empty()            
-    def run_refinements(self,gcheb:GridwiseChebyshev,):        
+    def single_refinement_decision(self,i:int,gcheb:GridwiseChebyshev,follower:bool = True):        
+        if follower:
+            gcheb.refine(i)
+            return True
+        
+        deg = gcheb[i].degree            
+        if  deg == self.degree_increments[-1]:                       
+            if deg > self.degree_increments[0]:
+                gcheb.change_degree(i,self.degree_increments[0])
+            gcheb.refine(i)
+            self.refined_interval()
+            return True
+        else:
+            degi = self.degree_increments.index(deg)
+            deg = self.degree_increments[degi + 1]
+            gcheb.change_degree(i,deg)
+            return False
+    def run_refinements(self,*gchebs:GridwiseChebyshev,):        
         for i in self.iterate_refs():
-            deg = gcheb[i].degree
+            bisect_flag = self.single_refinement_decision(i,gchebs[0],follower=False)
+            if not bisect_flag:
+                continue
+            for gcheb_ in gchebs[1:]:
+                self.single_refinement_decision(i,gcheb_,follower=True)
             
-            if  deg == self.degree_increments[-1]:                       
-                if deg > self.degree_increments[0]:
-                    gcheb.change_degree(i,self.degree_increments[0])
-                gcheb.refine(i)
-                self.refined_interval()
-                # logging.info(f' {i}: {deg} -> {gcheb[i].degree,gcheb[i+1].degree}')
-            else:
-                degi = self.degree_increments.index(deg)
-                deg = self.degree_increments[degi + 1]
-                gcheb.change_degree(i,deg)
-                # logging.info(f' {i}: {deg} -> {gcheb[i].degree}')
-        self.refresh()
         
 class GridControlledRefiner(CustomRefiner):
     control_cls_list :List[type] = [GridConditionControl,MaxNumIntervalControl]

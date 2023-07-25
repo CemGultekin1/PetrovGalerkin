@@ -59,13 +59,13 @@ r^2 has degree 6p
 '''
 
 class ResidualFunction:
-    def __init__(self,dim:int,chebint:ChebyshevInterval,lclslv:LocalSystemSolver,) -> None:
+    def __init__(self,dim:int,chebint:ChebyshevInterval,probint:ChebyshevInterval,lclslv:LocalSystemSolver,) -> None:
         lclslv.solve()
         degree = chebint.degree
         gcheb = GridwiseChebyshev.create_from_local_solution(chebint,\
                         lclslv.interior_solution,\
                         lclslv.edge_solution,dim**2*degree)
-        matfun,_ = chebint.separate_funs()
+        matfun,_ = probint.separate_funs()
         self.dim = dim
         self.solution = gcheb
         self.matfun = matfun
@@ -94,19 +94,17 @@ class OrthogonalResidueNorm:
     def orthogonal_norm(self,res:ResidualFunction,degree:int):
         return self.resnorm.residual_norm_from_fun(res,res.interval,degree = degree)
         
-
-
 class LocalErrorEstimate:
     def __init__(self,dim:int,equfact:EquationFactory) -> None:
         self.dim = dim
         self.lcl_sys_alloc = LocalSysAllocator(dim,equfact)
         self.orth_res_norm = OrthogonalResidueNorm(equfact.max_degree)
-    def interval_error(self,lclcheb:ChebyshevInterval):
-        blocks,rhs = self.lcl_sys_alloc.get_single_interval_blocks(lclcheb)
+    def interval_error(self,lclcheb:ChebyshevInterval,problem_components:ChebyshevInterval):
+        blocks,rhs = self.lcl_sys_alloc.get_single_interval_blocks(lclcheb,problem_components)
         sgs = DenseLocalSystem(blocks,rhs)
         lss = LocalSystemSolver(sgs)
         lss.solve()
-        res = ResidualFunction(self.dim,lclcheb,lss)
+        res = ResidualFunction(self.dim,lclcheb,problem_components,lss)
         orthnorm = self.orth_res_norm.orthogonal_norm(res,lclcheb.degree)
         return orthnorm*lclcheb.h/2
 

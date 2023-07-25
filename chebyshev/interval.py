@@ -48,8 +48,7 @@ class ChebyshevInterval(Interval,ChebyshevCoeffs):
         xhat = self.normalize(x)
         return coeffevl(xhat,self.coeffs)    
     def separate_funs(self,):
-        if isinstance(self.separator,EmptySeparator):
-            
+        if isinstance(self.separator,EmptySeparator):            
             logging.error(f'No separator assigned!')
             raise Exception
         coeffss = self.separator(self.coeffs.reshape([self.degree,-1]),axis = 1)
@@ -151,6 +150,20 @@ class GridwiseChebyshev(Grid):
         gcheb = GridwiseChebyshev(fun,x0 = chebint.interval[0],x1 = chebint.interval[1])
         gcheb.cheblist.append(chebint)
         return gcheb
+    def new_grided_chebyshev(self,dim:int,degree:int= -1):
+        gcheb = GridwiseChebyshev.__new__(GridwiseChebyshev,)
+        gcheb.__dict__.update(self.__dict__)
+        chebints = []
+        for cheb in self.cheblist:
+            if degree <= 0:
+                chebints.append(ChebyshevInterval(*cheb.interval,cheb.coeffs[:,:dim]))
+            else:
+                chebints.append(ChebyshevInterval(*cheb.interval,cheb.coeffs[:degree,:dim]))
+        gcheb.cheblist = chebints
+        return gcheb
+        
+        
+            
         
     @classmethod
     def from_function(cls, fun:FlatListOfFuns,degree:int ,x0:float,x1:float,):

@@ -53,7 +53,6 @@ class LinearBoundaryProblem:
     
 class LinearSolver(LinearBoundaryProblem,PetrovGalerkinSolverSettings):
     def __init__(self,pgs:PetrovGalerkinSolverSettings, lbp:LinearBoundaryProblem)-> None:
-        self.dim = lbp.dim
         self.__dict__.update(lbp.__dict__)  
         self.__dict__.update(pgs.__dict__)        
         self.listfuns = ListOfFuns(self.matfun,self.rhsfun)
@@ -62,15 +61,24 @@ class LinearSolver(LinearBoundaryProblem,PetrovGalerkinSolverSettings):
         self.equfactory  = EquationFactory(self.dim,pgs.max_degree,self.boundary_condition)
         self.lclerr = LocalErrorEstimate(self.dim,self.equfactory)
         self.repref = RepresentationRefiner(self.degree_increments,self.max_rep_err,self.max_num_interval,self.max_grid_cond)
-        self.solref = SolutionRefiner(self.lclerr,self.degree_increments,self.max_lcl_err,self.max_num_interval,self.max_grid_cond)
-        
+        self.solref = SolutionRefiner(self.lclerr,self.degree_increments,\
+            self.max_lcl_err,self.max_num_interval,self.max_grid_cond)
+        self.solution = None
+    def refine_for_local_problems(self,):
+        self.solution = self.mergedfuns.new_grided_chebyshev(self.dim,degree = self.degree_increments[0])
+        max_iter_num = 128
+        for i in range(max_iter_num):
+            flag = self.solref.run_controls(self.solution,self.mergedfuns)
+            if flag:
+                break
+            self.solref.run_refinements(self.solution,self.mergedfuns)
+        self.mergedfuns.update_edge_values()
+        self.solution.update_edge_values()
     def refine_for_representation(self,):
         max_iter_num = 128
         for i in range(max_iter_num):            
             flag = self.repref.run_controls(self.mergedfuns)
             if flag:
                 break
-            # logging.debug(f'\t\t before refinements({i}) : {self.mergedfuns.num_interval}')
             self.repref.run_refinements(self.mergedfuns)
-            # logging.debug(f'\t\t after  refinements({i})  : {self.mergedfuns.num_interval}')
         self.mergedfuns.update_edge_values()

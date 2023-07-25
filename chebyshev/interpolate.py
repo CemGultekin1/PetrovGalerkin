@@ -113,10 +113,6 @@ def foo(x):
     return np.stack([np.ones(x.shape),x,x**2,x**3],axis = 1).reshape([-1,2,2])
 
 def main():
-    # x = np.linspace(-1,1,100)
-    # coeffs = coeffgen(foo,4,outbounds = (0,0.5))
-    # print(coeffs.shape)
-    # vals = coeffevl(x,coeffs)
     cpt = ChebyshevPoints(10)
     cpt.gather_points()
     print(cpt.points)

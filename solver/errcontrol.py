@@ -14,11 +14,15 @@ class LclErrControl(Control):
         self.err_est = None
     def set_error_estimator(self,err_est:LocalErrorEstimate):
         self.err_est = err_est
-    def __call__(self, gcheb:GridwiseChebyshev,ref:GridControlledRefiner):
-        for i,cheb in enumerate(gcheb.cheblist):
-            err = self.err_est.interval_error(cheb)
-            if err > self.tol:
-                ref.assign_refinement(i,True)
+    def __call__(self,ref:GridControlledRefiner, *gchebs:GridwiseChebyshev,):
+        gcheb,gcheb1 = gchebs[0:2]
+        for i in ref.iterate_refs():
+            cheb = gcheb[i]
+            cheb1 = gcheb1[i]
+            err = self.err_est.interval_error(cheb,cheb1)
+            logging.info(f'interval({i}) = {err},{self.tol}')
+            ref.assign_refinement(i,err > self.tol)
+                
         
 class SolutionRefiner(GridControlledRefiner):
     control_cls_list :List[type] = [LclErrControl] + GridControlledRefiner.control_cls_list
