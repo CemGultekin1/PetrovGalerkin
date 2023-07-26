@@ -5,6 +5,22 @@ from .boundary import BoundaryElementMatrices
 from .interior import InteriorElementMatrices
 import numpy as np
 
+class AllocationSystem:
+    def __init__(self,ps:np.ndarray,dim:int) -> None:
+        ps = np.insert(ps,0,1)
+        ps = np.insert(ps,len(ps),1)
+        self.degrees = ps
+        self.dim = dim
+        self.right_edges = np.cumsum(ps)*dim
+    def get_interval_center(self,i:int)->Tuple[int,int]:
+        i+=1
+        redge = self.right_edges[i]
+        ledge = 0
+        if i > 0:
+            legde = self.right_edges[i-1]
+        return ledge,redge
+    
+        
 class TriRowColumn:
     def __init__(self,mat_left:np.ndarray,mat_center:np.ndarray,mat_right:np.ndarray,rhs_center:np.ndarray) -> None:
         mats = (mat_left,mat_center,mat_right)

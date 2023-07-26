@@ -10,7 +10,7 @@ class EquationFactory:
         self.max_degree = max_degree
         self.interr = InteriorElementFactory(max_degree)
         self.interr.fillup()
-        self.bndr = BoundaryElementFactory(max_degree)        
+        self.bndr = BoundaryElementFactory(max_degree)  
         self.bndr.fillup()
         self.bndr_cond = self.bndr.create_boundary_condition_element_factory(boundary_condition)
     def change_boundary_condition(self,bcond:BoundaryCondition)->'EquationFactory':

@@ -9,7 +9,8 @@ class GlobalSystemSolver(SparseGlobalSystem):
         self.__dict__.update(spglblsys.__dict__)
         self.solution = np.empty(0)
     def solve(self,):
-        self.solution =  spsolve(self.mat,self.rhs)
+        if self.solution.size == 0:
+            self.solution =  spsolve(self.mat,self.rhs)
         if not isinstance(self.solution,np.ndarray):
             self.solution = self.solution.toarray()
     def get_wrapped_solution(self,gcheb:GridwiseChebyshev,inplace:bool = False)->GridwiseChebyshev:
@@ -17,6 +18,11 @@ class GlobalSystemSolver(SparseGlobalSystem):
             gcheb.adopt_solution(self.solution,self.dim)
             return gcheb
         return gcheb.create_from_solution(self.solution,self.dim)
+    def adjoint_system(self,):
+        gss = GlobalSystemSolver(self)
+        gss.mat = gss.mat.transpose()
+        return gss
+        
         
     
 class LocalSystemSolver(DenseLocalSystem):
@@ -35,3 +41,5 @@ class LocalSystemSolver(DenseLocalSystem):
     @property
     def edge_solution(self,)->Tuple[np.ndarray,np.ndarray]:
         return self.solution[:self.dim,:],self.solution[-self.dim:,:]
+    
+        

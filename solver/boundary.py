@@ -41,6 +41,10 @@ class BoundaryElementFactory(Boundary):
         #     logging.debug(f'Center = \n{base}')
         
         return BoundaryElement(bcross,base,fcross)
+    def averaging_edge_value(self,leftdegree:int,rightdegree:int):        
+        leftval = self.value.right[:leftdegree]/2
+        rightval = self.value.left[:rightdegree]/2
+        return leftval,rightval
     def create_boundary_condition_element_factory(self,bc:BoundaryCondition,):
         return BoundaryConditionElementFactory(bc,self.value)
 def eye_kron_multip(vec:np.ndarray,eyevec:np.ndarray):

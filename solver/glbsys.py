@@ -11,7 +11,7 @@ class GlobalSysAllocator:
     def __init__(self,dim:int,lcleq:EquationFactory) -> None:
         self.local_equation = lcleq
         self.dim = dim
-    def create_blocks(self,gridwise:GridwiseChebyshev,target_degrees:Tuple[int,...]):
+    def create_blocks(self,gridwise:GridwiseChebyshev,target_degrees:Tuple[int,...],without_boundary:bool = False):
         ps = target_degrees#gridwise.ps
         ncheb = len(ps)
         blocks = BlockedMatrixFrame(self.dim)
@@ -19,6 +19,8 @@ class GlobalSysAllocator:
             bclm0 = self.local_equation.generate_interior_matrices(gridwise.cheblist[0],1,1,ps[0])
             bclm0.trim(left = True,right = True)
             blocks.add_tricolumn(bclm0)
+            if without_boundary:
+                return blocks
         else:
             bclm0 = self.local_equation.generate_interior_matrices(gridwise.cheblist[0],1,ps[1],ps[0])
             bclm0.trim(left = True)
@@ -31,6 +33,8 @@ class GlobalSysAllocator:
             bclm1 = self.local_equation.generate_interior_matrices(gridwise.cheblist[-1],ps[-2],1,ps[-1])
             bclm1.trim(right = True)
             blocks.add_tricolumn(bclm1)
+            if without_boundary:
+                return blocks
         
         blocks.move(0,self.dim)
         blocks.extend(0,self.dim)

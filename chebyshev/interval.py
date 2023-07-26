@@ -86,13 +86,18 @@ class Grid(Interval):
         super().__init__(x0,x1)
         self.edges = [x0,x1]
     def loc(self,x:NumericType):
+        n = len(self.edges) - 2
         location =  np.searchsorted(self.edges,x,side = 'right') - 1
         if isinstance(x,np.ndarray):
-            return location
+            return np.minimum(location,n)
         elif np.isscalar(x):
-            return (location,)
+            return (np.minimum(location,n),)
         else:
             logging.error(f'The input {x} is neither scalar nor np.ndarray')
+    def find_touching_intervals(self,x0:float,x1:float):
+        x0,x1 = x1,x0 if x1 < x0 else x0,x1
+        x0i,x1i = (np.argmin(np.abs(np.array(self.edges) - x)) for x in (x0,x1))
+        return np.arange(x0i,x1i)
     @property
     def conds(self,):
         return np.array(self.edges)/np.amin(self.edges)
@@ -203,7 +208,7 @@ class GridwiseChebyshev(Grid):
         gcheb.update_edge_values()
         return gcheb
     
-    def nmatching_gcheb_from_functions(self, *funs:NumericFunType,):
+    def matching_gcheb_from_functions(self, *funs:NumericFunType,):
         fun = ListOfFuns(*funs).flatten()
         cints = []
         for degree,x0,x1 in zip(self.ps,self.edges[:-1],self.edges[1:],):
@@ -218,8 +223,14 @@ class GridwiseChebyshev(Grid):
     def hs(self,)->np.ndarray:
         return np.array([cint.h for cint in self.cheblist])
     @property
-    def ps(self,)->Tuple[int]:
-        return tuple(cint.degree for cint in self.cheblist)
+    def ps(self,)->np.ndarray:
+        return np.array([cint.degree for cint in self.cheblist])
+    @property
+    def extended_ps(self,)->np.ndarray:
+        ps = self.ps
+        ps =np.insert(ps,0,1)
+        ps = np.insert(ps,len(ps),1)
+        return ps
     def __getitem__(self,i:int)->ChebyshevInterval:
         return self.cheblist[i]
     def refine(self,i:int):
@@ -234,12 +245,12 @@ class GridwiseChebyshev(Grid):
     def __call__(self,x:NumericType):
         locs = self.loc(x)
         ys = []
-        n = len(self.cheblist) - 1
+        # n = len(self.cheblist) - 1
         if len(self.cheblist) == 1:
             return self.cheblist[0](x)
         
         for i,loc in enumerate(locs):
-            loc = np.minimum(loc,n)
+            
             y = self.cheblist[loc](x[i])
             ys.append(y)
         ys = np.stack(ys,axis = 0)

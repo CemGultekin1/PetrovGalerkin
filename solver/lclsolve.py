@@ -22,13 +22,15 @@ class LocalSysAllocator(GlobalSysAllocator):
         super().__init__(dim, lcleq)
         self.local_equation =  LocalEquationFactory(lcleq)
         
-    def get_single_interval_blocks(self,chebint:ChebyshevInterval,problem_components:ChebyshevInterval):
+    def get_single_interval_blocks(self,chebint:ChebyshevInterval,problem_components:ChebyshevInterval,without_boundary:bool = False):
         gcheb = GridwiseChebyshev.from_single_chebyshev(problem_components,problem_components)
-        lblocks = self.create_blocks(gcheb,(chebint.degree,))
+        lblocks = self.create_blocks(gcheb,(chebint.degree,),without_boundary=without_boundary)
         p = chebint.degree
         rhs = np.zeros(((p+2)*self.dim,self.dim))
         rhs[-2*self.dim:-self.dim,:] = np.eye(self.dim)
         rhs[-self.dim:,:] = np.eye(self.dim)
+        if without_boundary:
+            rhs = rhs[:-2*self.dim,:]
         return lblocks,rhs
         
 

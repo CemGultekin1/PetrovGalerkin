@@ -53,7 +53,7 @@ class MatRhsFuns(HybridStateSystem):
         elif self.mode == 'params':
             return self.params_sys_rhs(x)
         elif self.mode == 'design':
-            return self.design_sys_rhs(x,ame = self.design_param)
+            return self.design_sys_rhs(x,name = self.design_param)
     def boundary_conditions(self,):
         if self.mode == 'org':
             return self.org_sys_bndr()
@@ -64,7 +64,7 @@ class MatRhsFuns(HybridStateSystem):
 
 
 def main():
-    hmrf = MatRhsFuns(time = 3,mode = 'params')
+    hmrf = MatRhsFuns(time = 0.5,mode = 'params')
     matfun_, rhsfun_,bndr_cond,edges = hmrf.matfun,hmrf.rhsfun,hmrf.boundary_conditions(),hmrf.edges()
     pgs = PetrovGalerkinSolverSettings(degree_increments = (8,12,16,),\
                     max_rep_err=1e-2,max_lcl_err=1e-3,max_num_interval=2**12,)
@@ -82,6 +82,8 @@ def main():
     
     hmrf = MatRhsFuns(time = 3,mode = 'design')
     dtheta = ls.solution.matching_gcheb_from_functions(hmrf.matfun,hmrf.rhsfun,)
+    
+    
     return
     x = np.array(hmrf.fingerprint_edges())
     y = ls.solution(x)
