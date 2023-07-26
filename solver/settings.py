@@ -46,10 +46,10 @@ class LinearBoundaryProblem:
     def __init__(self,\
             funs:Tuple[NumericFunType,NumericFunType] = (),\
             boundary_condition: Tuple[np.ndarray,np.ndarray,np.ndarray] = (np.empty(0,),np.empty(0,),np.empty(0)),\
-            boundaries :Tuple[float,float] = (0.,1.),) -> None:
+            edges :Tuple[float,...] = (0.,1.),) -> None:
         self.matfun, self.rhsfun = funs
         self.boundary_condition = BoundaryCondition(*boundary_condition)
-        self.boundaries = boundaries
+        self.edges = edges
         self.dim = self.boundary_condition.dim
     
 class LinearSolver(LinearBoundaryProblem,PetrovGalerkinSolverSettings):
@@ -58,7 +58,10 @@ class LinearSolver(LinearBoundaryProblem,PetrovGalerkinSolverSettings):
         self.__dict__.update(pgs.__dict__)        
         self.listfuns = ListOfFuns(self.matfun,self.rhsfun)
         self.flatlistfuns = self.listfuns.flatten()        
-        self.mergedfuns = GridwiseChebyshev.from_function(self.flatlistfuns,self.min_degree,*lbp.boundaries)
+        if len(lbp.edges)>2:
+            self.mergedfuns = GridwiseChebyshev.from_function_and_edges(self.flatlistfuns,self.min_degree,lbp.edges)            
+        elif len(lbp.edges) == 2:
+            self.mergedfuns = GridwiseChebyshev.from_function(self.flatlistfuns,self.min_degree,*lbp.edges)
         self.equfactory  = EquationFactory(self.dim,pgs.max_degree,self.boundary_condition)
         self.lclerr = LocalErrorEstimate(self.dim,self.equfactory)
         self.repref = RepresentationRefiner(self.degree_increments,self.max_rep_err,self.max_num_interval,self.max_grid_cond)

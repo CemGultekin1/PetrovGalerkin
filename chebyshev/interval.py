@@ -2,7 +2,7 @@ import logging
 from typing import List, Tuple
 import numpy as np
 from .interpolate import coeffevl,coeffgen
-from .funs import FlatListOfFuns,NumericType,ConcatenatedVectorSeparator,EmptySeparator
+from .funs import FlatListOfFuns,NumericType,ConcatenatedVectorSeparator,EmptySeparator,NumericFunType,ListOfFuns
 
 class Interval:
     def __init__(self,a:float,b:float,) -> None:
@@ -191,6 +191,29 @@ class GridwiseChebyshev(Grid):
         cints = GridwiseChebyshev(fun,x0,x1)
         cints.cheblist.append(cint)
         return cints
+    @classmethod
+    def from_function_and_edges(cls, fun:FlatListOfFuns,degree:int ,edges:Tuple[float]):
+        cints = []
+        for x0,x1 in zip(edges[:-1],edges[1:]):
+            cint = ChebyshevInterval.from_function(fun,degree,x0,x1)
+            cints.append(cint)
+        gcheb = GridwiseChebyshev(fun,edges[0],edges[-1])
+        gcheb.cheblist.extend(cints)
+        gcheb.edges = list(edges)
+        gcheb.update_edge_values()
+        return gcheb
+    
+    def nmatching_gcheb_from_functions(self, *funs:NumericFunType,):
+        fun = ListOfFuns(*funs).flatten()
+        cints = []
+        for degree,x0,x1 in zip(self.ps,self.edges[:-1],self.edges[1:],):
+            cint = ChebyshevInterval.from_function(fun,degree,x0,x1)
+            cints.append(cint)
+        gcheb = GridwiseChebyshev(fun,self.edges[0],self.edges[-1])
+        gcheb.cheblist.extend(cints)
+        gcheb.edges = list(self.edges)
+        gcheb.update_edge_values()
+        return gcheb
     @property
     def hs(self,)->np.ndarray:
         return np.array([cint.h for cint in self.cheblist])
