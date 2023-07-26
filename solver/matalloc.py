@@ -47,7 +47,7 @@ class BlockColumns(TriRowColumn):
 def tri_column_slices(a:int,b:int,c:int,p:int,w,p1:int):
     return slice(p-a,p+b+c),slice(p1,p1+w)
 def rhs_column_slices(b:int,p:int):
-    return slice(p,p+b)
+    return (slice(p,p+b),)
 
 @dataclass
 class AllocatableBlock:
@@ -109,13 +109,17 @@ class BlockedMatrixFrame:
         if not rhs:
             return
         rhsslctp = (slice(prow,prow +h),)
-        rhsab = AllocatableBlock(mc.rhsclm,rhsslctp)
+        n = len(mc.rhsclm.flatten())
+        assert n == h
+        rhsab = AllocatableBlock(mc.rhsclm.flatten(),rhsslctp)
         self.rhs_blocks.append(rhsab)
     def extend(self,*stps:int):
         self.crc.move(*stps)
     def move(self,*stps:int):
         for mb in self.mat_blocks:
             mb.move(*stps)
+        for mb in self.rhs_blocks:
+            mb.move(stps[0])
         self.crc.move(*stps)
         
     @property

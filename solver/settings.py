@@ -6,8 +6,9 @@ from chebyshev import NumericFunType,ListOfFuns,GridwiseChebyshev,Representation
 from solver.bndrcond import BoundaryCondition
 from solver.eqgen import EquationFactory
 from solver.errcontrol import SolutionRefiner
+from solver.glbsys import GlobalSysAllocator, SparseGlobalSystem
 from .lclerr import LocalErrorEstimate
-
+from .linsolve import GlobalSystemSolver
 @dataclass
 class PetrovGalerkinSolverSettings:
     max_num_interval :float = 2**8
@@ -63,7 +64,7 @@ class LinearSolver(LinearBoundaryProblem,PetrovGalerkinSolverSettings):
         self.repref = RepresentationRefiner(self.degree_increments,self.max_rep_err,self.max_num_interval,self.max_grid_cond)
         self.solref = SolutionRefiner(self.lclerr,self.degree_increments,\
             self.max_lcl_err,self.max_num_interval,self.max_grid_cond)
-        self.solution = None
+        self.solution = self.mergedfuns
     def refine_for_local_problems(self,):
         self.solution = self.mergedfuns.new_grided_chebyshev(self.dim,degree = self.degree_increments[0])
         max_iter_num = 128
@@ -73,12 +74,31 @@ class LinearSolver(LinearBoundaryProblem,PetrovGalerkinSolverSettings):
                 break
             self.solref.run_refinements(self.solution,self.mergedfuns)
         self.mergedfuns.update_edge_values()
+        dims = [self.solution.cheblist[i].dim for i in range(self.solution.num_interval)]
+        dims = np.array(dims)
+        if not np.all(dims==dims[0]):
+            logging.error(f'{dims.tolist()}')
+            dims = [self.mergedfuns.cheblist[i].dim for i in range(self.mergedfuns.num_interval)]
+            logging.error(f'{dims}')
+            raise Exception
         self.solution.update_edge_values()
     def refine_for_representation(self,):
-        max_iter_num = 128
-        for i in range(max_iter_num):            
+        max_iter_num = 256
+        for _ in range(max_iter_num):            
             flag = self.repref.run_controls(self.mergedfuns)
             if flag:
                 break
             self.repref.run_refinements(self.mergedfuns)
         self.mergedfuns.update_edge_values()
+    def solve(self,):
+        nags = GlobalSysAllocator(self.dim,self.equfactory)
+
+        blocks = nags.create_blocks(self.mergedfuns,tuple(self.solution.ps))
+        sgs = SparseGlobalSystem(blocks)
+        
+        
+        
+        gss = GlobalSystemSolver(sgs)
+        gss.solve()
+        
+        self.solution = gss.get_wrapped_solution(self.solution,inplace = True)

@@ -12,7 +12,10 @@ class GlobalSystemSolver(SparseGlobalSystem):
         self.solution =  spsolve(self.mat,self.rhs)
         if not isinstance(self.solution,np.ndarray):
             self.solution = self.solution.toarray()
-    def get_wrapped_solution(self,gcheb:GridwiseChebyshev)->GridwiseChebyshev:
+    def get_wrapped_solution(self,gcheb:GridwiseChebyshev,inplace:bool = False)->GridwiseChebyshev:
+        if inplace:
+            gcheb.adopt_solution(self.solution,self.dim)
+            return gcheb
         return gcheb.create_from_solution(self.solution,self.dim)
         
     

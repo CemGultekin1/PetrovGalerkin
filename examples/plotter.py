@@ -79,7 +79,21 @@ class GridwiseChebyshevPlotter:
 class MultiDimGridwiseChebyshevPlotter(GridwiseChebyshevPlotter):
     def __init__(self, per_interval_pts_num: int = 64, flux_sep: float = 0.05,) -> None:
         super().__init__(per_interval_pts_num, flux_sep)
-    def draw(self, chebint: GridwiseChebyshev):
+    def draw(self, chebint: GridwiseChebyshev,true_sol_fun:callable = None):
         dim = chebint.dim
         for i in range(dim):
-            yield super().draw(chebint.separate_dims(dim,index = i))
+            fig,axs = super().draw(chebint.separate_dims(dim,index = i))
+            if true_sol_fun is not None:
+                def pick_value(x):
+                    y = true_sol_fun(x)
+                    return y[:,i]
+                self.draw_true(axs,chebint,pick_value)
+            yield fig,axs
+    def draw_true(self,axs:plt.Axes,chebint: GridwiseChebyshev,true_sol_fun:callable):            
+        for i,cheb in enumerate(chebint.cheblist):
+            a,b = cheb.interval
+            x = np.linspace(a,b,self.per_interval_pts_num)
+            y = true_sol_fun(x)
+            x_ = np.linspace(i,i+1,self.per_interval_pts_num)
+            axs.plot(x_,y,color = 'r',linewidth = 4,alpha = 0.5)
+         

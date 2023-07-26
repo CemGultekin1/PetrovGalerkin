@@ -16,8 +16,7 @@ class InteriorElement:
     def to_matrix_form(self,):
         dim = self.rhs_element.shape[1]
         deg = self.degree
-        # takes the transpose for adjoint
-        mat = self.mat_element.reshape([-1,deg,dim,dim]).transpose((0,3,1,2)).reshape([-1,deg*dim]) 
+        mat = self.mat_element.reshape([-1,deg,dim,dim]).transpose((0,2,1,3)).reshape([-1,deg*dim]) 
         rhs = self.rhs_element.flatten()
         der = self.der_quads.reshape([-1,1])*np.eye(dim).reshape([1,-1])
         der = der.reshape([-1,deg,dim,dim]).transpose((0,2,1,3)).reshape([-1,deg*dim])
@@ -58,7 +57,7 @@ class AdjointInteriorElement(InteriorElement):
         dim = self.rhs_element.shape[1]
         deg = self.mat_element.shape[1]
         # takes the transpose for adjoint
-        mat = self.mat_element.reshape([-1,deg,dim,dim]).transpose((0,2,1,3)).reshape([-1,deg*dim]) 
+        mat = self.mat_element.reshape([-1,deg,dim,dim]).transpose((0,3,1,2)).reshape([-1,deg*dim]) 
         rhs = self.rhs_element.flatten()
         der = self.der_quads.reshape([-1,1])*np.eye(dim).reshape([1,-1])
         der = der.reshape([-1,deg,dim,dim]).transpose((0,2,1,3)).reshape([-1,deg*dim])

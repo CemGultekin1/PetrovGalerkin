@@ -76,13 +76,13 @@ class ResidualFunction:
         mat :np.ndarray= self.matfun(x)
         sltn:np.ndarray= self.solution(x) # t x d x deg * d
         mat = mat.reshape(len(x),self.dim,self.dim).transpose(0,2,1) # t x d x d
-        sltn = sltn.reshape(len(x),self.dim,1) # t x d
+        sltn = sltn.reshape(len(x),self.dim,self.dim) # t x d
         negATv = np.matmul(mat,sltn)
         a,b = self.interval
         xhat = (x - a)/(b-a)*2 - 1        
         dv = cheb.chebder(self.solution.cheblist[0].coeffs)*2/self.h
         dv :np.ndarray= coeffevl(xhat,dv) # t x dim
-        dv = dv.reshape(len(x),self.dim,1)
+        dv = dv.reshape(len(x),self.dim,self.dim)
         r = - dv + negATv 
         return r
                 

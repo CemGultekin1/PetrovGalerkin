@@ -28,10 +28,10 @@ class ShapedCoefficients:
             coeffs = coeffs.reshape([c0,*sm.shape])
         return coeffs
 class ShapedCoeffsEval(ShapedCoefficients):
-    def __call__(self,x:NumericType,coeffs:np.ndarray):
+    def __call__(self,x:NumericType,coeffs:np.ndarray)->np.ndarray:
         shape = coeffs.shape
         coeffs = coeffs.reshape([-1,sum(shape[1:])])
-        evals = self.fun(x,coeffs)
+        evals :np.ndarray= self.fun(x,coeffs)
         if self.lefthanded:
             evals = evals.T
         if isinstance(x,(float,int)):
@@ -53,7 +53,7 @@ class IntervalBound:
 class IntervalBoundDecorator:
     def __init__(self,fun) -> None:
         self.fun = fun
-    def __call__(self, fun:NumericFunType,*args: Any, inbounds:Tuple[int,int] = (-1,1),outbounds:Tuple[int,int] = (-1,1),**kwargs) -> Any:
+    def __call__(self, fun:NumericFunType,*args: Any, inbounds:Tuple[int,int] = (-1,1),outbounds:Tuple[int,int] = (-1,1),**kwargs) -> np.ndarray:
         bounded_fun = IntervalBound(fun,inbounds =inbounds, outbounds=outbounds)
         return self.fun(bounded_fun,*args,**kwargs)
 
@@ -95,11 +95,12 @@ coeffevl = ShapedCoeffsEval(cheb.chebval,lefthanded=lefthanded)
 
 
 class PtsWiseChebErr(ChebyshevPointsCollection):
+    degdif :int = 3
     def __init__(self, max_degree: int) -> None:
-        super().__init__(1, max_degree + 1)
+        super().__init__(1, max_degree + self.degdif)
     def evaluate(self,coeffs:np.ndarray, lofns:FlatListOfFuns,interval:Tuple[float,float])->float:
         deg = coeffs.shape[0] - 1
-        pts_ = self[deg+1]
+        pts_ = self[deg+self.degdif]
         a,b = interval
         pts = (pts_ + 1)/2 * (b-a) + a
         truvals =lofns(pts)
@@ -107,7 +108,7 @@ class PtsWiseChebErr(ChebyshevPointsCollection):
         # logging.debug(f'pts = {pts}')
         # logging.debug(f'truvals = {truvals}')
         # logging.debug(f'estvals = {estvals}')
-        return np.amax(np.abs(truvals - estvals))
+        return np.amax(np.abs(truvals - estvals)/(np.abs(truvals) + np.abs(estvals) + 1e-12))*2
     
 def foo(x):
     return np.stack([np.ones(x.shape),x,x**2,x**3],axis = 1).reshape([-1,2,2])

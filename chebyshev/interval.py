@@ -32,12 +32,19 @@ class ChebyshevInterval(Interval,ChebyshevCoeffs):
         self.degree = coeffs.shape[0]        
         self.coeffs = coeffs.reshape([self.degree,-1])
         self.separator = separator
+    @property
+    def dim(self,):
+        return self.coeffs.shape[1]
     def to_ChebyshevCoeffs(self,):
         chebcoeff = ChebyshevCoeffs.__new__(ChebyshevCoeffs,)
         chebcoeff.coeffs = self.coeffs
         return chebcoeff
     @classmethod
-    def from_function(cls,fun:FlatListOfFuns,degree:int, x0:float,x1:float,):
+    def from_function(cls,fun:FlatListOfFuns,degree:int, x0:float,x1:float,dim:int = -1):
+        if fun is None:
+            assert dim >0
+            coeffs = np.zeros((degree,dim))
+            return ChebyshevInterval(x0,x1,coeffs,)
         coeffs = coeffgen(fun,degree-1,outbounds=(x0,x1))
         return ChebyshevInterval(x0,x1,coeffs,separator=fun.separator)
     def left_value(self,):
@@ -60,11 +67,14 @@ class ChebyshevInterval(Interval,ChebyshevCoeffs):
     def bisect(self,fun:FlatListOfFuns):
         # logging.debug(f'Refining the interval {self.interval} into two pieces')
         int0,int1 = Interval.bisect(self,)
-        cint0 = ChebyshevInterval.from_function(fun,self.degree,*int0.interval)
-        cint1 = ChebyshevInterval.from_function(fun,self.degree,*int1.interval)
+        cint0 = ChebyshevInterval.from_function(fun,self.degree,*int0.interval,dim = self.dim)
+        cint1 = ChebyshevInterval.from_function(fun,self.degree,*int1.interval,dim = self.dim)
         return cint0,cint1
     def change_degree(self,fun:FlatListOfFuns,degree:int):
-        coeffs = coeffgen(fun,degree-1,outbounds=self.interval)
+        if fun is None:
+            coeffs = np.zeros((degree,self.dim))
+        else:
+            coeffs = coeffgen(fun,degree-1,outbounds=self.interval)
         self.coeffs = coeffs
         self.degree = degree
     def new_by_coeff(self,coeffs:np.ndarray):
@@ -107,12 +117,18 @@ class EdgeValues:
             edge_values.append(chn.left_value())
             edge_values.append(chn.right_value())
         edge_values.append(tail_edge)
+        shp = None
         for i in [0,len(edge_values)-1]:
             x = edge_values[i]
             if x.size == 0:
                 edge_values[i] = edge_values[1]*0
-
+            if shp is None:
+                shp = edge_values[i].size
+            else:
+                assert shp == edge_values[i].size
         edge_values = [ev.flatten() for ev in edge_values]
+        edge_shp = np.array([ev.size for ev in edge_values])
+        assert np.all(edge_shp == edge_shp[0])
         edge_values = np.stack(edge_values,axis = 0)
         edge_values = edge_values.reshape(edge_values.shape[0]//2,2,edge_values.shape[1]) # time x l/r x dim
         self.values = edge_values  
@@ -154,12 +170,16 @@ class GridwiseChebyshev(Grid):
         gcheb = GridwiseChebyshev.__new__(GridwiseChebyshev,)
         gcheb.__dict__.update(self.__dict__)
         chebints = []
-        for cheb in self.cheblist:
+        for cheb in self.cheblist:            
             if degree <= 0:
-                chebints.append(ChebyshevInterval(*cheb.interval,cheb.coeffs[:,:dim]))
+                cint = ChebyshevInterval(*cheb.interval,cheb.coeffs[:,:dim])
             else:
-                chebints.append(ChebyshevInterval(*cheb.interval,cheb.coeffs[:degree,:dim]))
+                cint = ChebyshevInterval(*cheb.interval,cheb.coeffs[:degree,:dim])
+            assert cint.dim == dim
+            chebints.append(cint)
         gcheb.cheblist = chebints
+        gcheb.fun = None
+        gcheb.edge_values = EdgeValues(chebints)
         return gcheb
         
         
@@ -175,8 +195,8 @@ class GridwiseChebyshev(Grid):
     def hs(self,)->np.ndarray:
         return np.array([cint.h for cint in self.cheblist])
     @property
-    def ps(self,)->List[int]:
-        return [cint.degree for cint in self.cheblist]
+    def ps(self,)->Tuple[int]:
+        return tuple(cint.degree for cint in self.cheblist)
     def __getitem__(self,i:int)->ChebyshevInterval:
         return self.cheblist[i]
     def refine(self,i:int):
@@ -239,6 +259,23 @@ class GridwiseChebyshev(Grid):
         gg.edge_values = EdgeValues(new_cheblist,head_edge=head_edge,tail_edge=tail_edge)
         gg.edge_values.set_up_to_date(True)
         return gg
+    def adopt_solution(self,solution:np.ndarray,dim:int):
+        solution = solution.reshape([-1,dim])
+        head_edge = solution[0]
+        tail_edge = solution[-1]
+        
+        solution = solution[1:-1,:]
+        ps = self.ps
+        per_int_solution = np.split(solution,np.cumsum(ps),axis = 0)
+        new_cheblist = []        
+        for coeffs,chebint in zip(per_int_solution,self.cheblist):
+            new_cheblist.append(chebint.new_by_coeff(coeffs))
+        self.cheblist = new_cheblist
+        self.fun = None
+        self.edges = self.edges
+        self.edge_values = EdgeValues(new_cheblist,head_edge=head_edge,tail_edge=tail_edge)
+        self.edge_values.set_up_to_date(True)
+        
     def separate_dims(self,splitter:List[int],index :int = 0):
         logging.debug(f'splitter:List[int] = {splitter},index :int = {index}')
         sepchebs = []
