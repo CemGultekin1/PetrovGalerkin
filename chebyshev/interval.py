@@ -94,8 +94,11 @@ class Grid(Interval):
             return (np.minimum(location,n),)
         else:
             logging.error(f'The input {x} is neither scalar nor np.ndarray')
+    def find_closest_edges(self,x:NumericType):
+        return np.array(list(map(lambda x_: np.argmin(np.abs(x_ -self.edges)),x)))
     def find_touching_intervals(self,x0:float,x1:float):
-        x0,x1 = x1,x0 if x1 < x0 else x0,x1
+        if x1<x0:
+            x0,x1 = x1,x0
         x0i,x1i = (np.argmin(np.abs(np.array(self.edges) - x)) for x in (x0,x1))
         return np.arange(x0i,x1i)
     @property
@@ -162,7 +165,11 @@ class GridwiseChebyshev(Grid):
         self.edge_values.set_up_to_date(False)
         self.fun = fun
         self.separator = fun.separator
-    
+    def get_mean_edge_values(self,):
+        if not self.edge_values.up_to_date:
+            self.update_edge_values(old_head_tail=True)
+        return self.edge_values.values.mean(axis = 1)
+            
     @property
     def dim(self,):
         return self.cheblist[0].coeffs.shape[1]

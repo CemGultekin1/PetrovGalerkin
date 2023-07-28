@@ -1,7 +1,7 @@
 import numpy as np
 from solver.settings import PetrovGalerkinSolverSettings,LinearBoundaryProblem,LinearSolver
 import logging
-from hybrid.fingerprints import HybridStateSystem,HybridStateSolution
+from hybrid.fingerprints import  HybridStateSystem
 from hybrid.cramer import CramerRaoBound,BasicLoss
 from hybrid.design import ThetaDesign
 
@@ -9,7 +9,7 @@ from hybrid.design import ThetaDesign
 def evaluate(theta_fun,gradient:bool= False):
     # time = 0.1
     full_edges = True
-    hmrf = HybridStateSystem(mode = 'params',theta = theta_fun)
+    hmrf = MatRhsFuns(mode = 'params',theta = theta_fun)
     time = hmrf.total_time
     matfun_, rhsfun_,bndr_cond,edges = hmrf.matfun,hmrf.rhsfun,hmrf.boundary_conditions(),hmrf.edges(full = full_edges)
     pgs = PetrovGalerkinSolverSettings(degree_increments = (4,8,16),\
@@ -32,8 +32,8 @@ def evaluate(theta_fun,gradient:bool= False):
     if not gradient:
         return lossfun(hss),None
     
-    hmrf1 = HybridStateSystem(time = time,mode = 'design',design_param='theta1')
-    hmrf2 = HybridStateSystem(time = time,mode = 'design',design_param='theta2')
+    hmrf1 = MatRhsFuns(time = time,mode = 'design',design_param='theta1')
+    hmrf2 = MatRhsFuns(time = time,mode = 'design',design_param='theta2')
 
     design1 = ls.solution.matching_gcheb_from_functions(hmrf1.matfun,hmrf1.rhsfun)
     design2 = ls.solution.matching_gcheb_from_functions(hmrf2.matfun,hmrf2.rhsfun)

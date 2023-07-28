@@ -1,13 +1,19 @@
 import sympy as sym
 from sympy.utilities import lambdify
 import numpy as np
-vnames = 'm0s, invt1, invt2f, r, t2s, theta, dtheta'.split(', ')
-m0s,invt1,invt2f,r,t2s,theta,dtheta = sym.symbols('m0s, invt1, invt2f, r, t2s, theta, dtheta')
+vnames = 'm0s, invt1, invt2f, r, t2s, theta1, theta2, rfpulse, freq, reltime'
+m0s,invt1,invt2f,r,t2s,theta1,theta2,rfpulse,freq,reltime = sym.symbols(vnames)
+
+vnames = vnames.split(', ')
+
+alpha = theta2 + theta1
+theta = theta1*(1 - rfpulse) + ((theta2 + theta1)*reltime*freq - theta1)*rfpulse
+dtheta = alpha*rfpulse*freq
 mat = sym.Matrix(
     [[sym.cos(theta)**2*invt1 - sym.sin(theta)**2*invt2f - sym.cos(theta)**2*r*m0s,
         r*(1-m0s)*sym.cos(theta)],[
             r*m0s*sym.cos(theta),
-            -invt1 - t2s*(dtheta)**2]]
+            -invt1 - t2s*dtheta**2]]
 )
 
 rhs = sym.Matrix( [(1-m0s)*sym.cos(theta)*invt1,m0s*invt1])
@@ -20,7 +26,10 @@ zmat = sym.Matrix(
 )
 
 param_vars = [m0s,invt1,invt2f,r,t2s]
-design_vars = [theta,dtheta]
+design_vars = [theta1,theta2]
+extra_vars = [reltime,freq,rfpulse]
+
+all_vars = param_vars + design_vars + extra_vars
 
 mats = [mat]
 rhss = [rhs]
@@ -63,9 +72,9 @@ params_sys_mats = (form_mat,form_rhs,form_bndr)
 design_sys_mats = (form_mat_design,form_rhs_design,form_bndr_design)
 
 
-org_sys_mats = tuple(lambdify(param_vars + design_vars,x) for x in org_sys_mats)
-params_sys_mats = tuple(lambdify(param_vars + design_vars,x) for x in params_sys_mats)
-design_sys_mats = tuple({key:lambdify(param_vars + design_vars,y) for key,y in x.items()} for x in design_sys_mats)
+org_sys_mats = tuple(lambdify(all_vars,x) for x in org_sys_mats)
+params_sys_mats = tuple(lambdify(all_vars,x) for x in params_sys_mats)
+design_sys_mats = tuple({key:lambdify(all_vars,y) for key,y in x.items()} for x in design_sys_mats)
 
 def subsdict(*args):
     return {vn:arg for vn,arg in zip(vnames,args)}
@@ -103,13 +112,13 @@ def params_sys(ssmat,*args,):
     return ssmat(*args)#.evalf(subs = subsdict(*args))
 
 @MatSelect(2)
-def design_sys(ssmat,*args,name: str = 'theta',):
+def design_sys(ssmat,*args,name: str = 'theta1',):
     return ssmat[name](*args)#.evalf(subs = subsdict(*args))
 
 
-def main():
-    mat = design_sys(0.1,0.1,0.1,0.1,0.1,0.1,0.1,bndr_flag = True,name = 'theta')
-    print(mat.shape)
+# def main():
+#     mat = design_sys(0.1,0.1,0.1,0.1,0.1,0.1,0.1,bndr_flag = True,name = 'theta')
+#     print(mat.shape)
 
-if __name__ == '__main__':
-    main()
+# if __name__ == '__main__':
+#     main()

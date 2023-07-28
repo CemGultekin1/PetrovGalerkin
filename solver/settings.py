@@ -9,6 +9,8 @@ from solver.errcontrol import SolutionRefiner
 from solver.glbsys import GlobalSysAllocator, SparseGlobalSystem
 from .lclerr import LocalErrorEstimate
 from .linsolve import GlobalSystemSolver
+from solver.design import GradientFactory, LossFunction,DesignSupport
+    
 @dataclass
 class PetrovGalerkinSolverSettings:
     max_num_interval :float = 2**8
@@ -68,6 +70,7 @@ class LinearSolver(LinearBoundaryProblem,PetrovGalerkinSolverSettings):
         self.solref = SolutionRefiner(self.lclerr,self.degree_increments,\
             self.max_lcl_err,self.max_num_interval,self.max_grid_cond)
         self.solution = self.mergedfuns
+        self.global_system_solver = None
     def refine_for_local_problems(self,):
         self.solution = self.mergedfuns.new_grided_chebyshev(self.dim,degree = self.degree_increments[0])
         max_iter_num = 128
@@ -103,5 +106,7 @@ class LinearSolver(LinearBoundaryProblem,PetrovGalerkinSolverSettings):
         
         gss = GlobalSystemSolver(sgs)
         gss.solve()
-        
+        self.global_system_solver = gss
         self.solution = gss.get_wrapped_solution(self.solution,inplace = True)
+    def get_gradient_factory(self,lossfun:LossFunction,design_support:DesignSupport):
+        return GradientFactory(self.equfactory,lossfun,self.lclerr.lcl_sys_alloc,design_support,self.dim)
