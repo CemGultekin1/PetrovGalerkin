@@ -13,11 +13,17 @@ class InteriorElement:
         self.der_quads = der_quads
         self.mat_element = mat_element        
         self.rhs_element = rhs_element    
-    def to_matrix_form(self,):
-        dim = self.rhs_element.shape[1]
+        self.dim = self.rhs_element.shape[1]
+    def mat_rhs_matrices(self,):
         deg = self.degree
+        dim = self.dim
         mat = self.mat_element.reshape([-1,deg,dim,dim]).transpose((0,2,1,3)).reshape([-1,deg*dim]) 
         rhs = self.rhs_element.flatten()
+        return mat,rhs
+    def to_matrix_form(self,):
+        mat,rhs = self.mat_rhs_matrices()
+        deg = self.degree
+        dim = self.dim
         der = self.der_quads.reshape([-1,1])*np.eye(dim).reshape([1,-1])
         der = der.reshape([-1,deg,dim,dim]).transpose((0,2,1,3)).reshape([-1,deg*dim])
         return InteriorElementMatrices(mat + der, rhs)

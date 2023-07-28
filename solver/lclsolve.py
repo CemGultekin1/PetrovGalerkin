@@ -21,17 +21,20 @@ class LocalSysAllocator(GlobalSysAllocator):
     def __init__(self, dim: int,lcleq: EquationFactory) -> None:
         super().__init__(dim, lcleq)
         self.local_equation =  LocalEquationFactory(lcleq)
+
         
-    def get_single_interval_blocks(self,chebint:ChebyshevInterval,problem_components:ChebyshevInterval,without_boundary:bool = False):
-        gcheb = GridwiseChebyshev.from_single_chebyshev(problem_components,problem_components)
-        lblocks = self.create_blocks(gcheb,(chebint.degree,),without_boundary=without_boundary)
+    def get_single_interval_blocks(self,chebint:ChebyshevInterval,chebint1:ChebyshevInterval):
+        gcheb = GridwiseChebyshev.from_single_chebyshev(chebint1,chebint1)
+        lblocks = self.create_blocks(gcheb,(chebint.degree,))
         p = chebint.degree
+        # x = self.local_equation.interr.dub_quads[:p,:p] * chebint.h/2
+        # x = np.concatenate([x,x[:2]*0],axis = 0)
+        # x = x.reshape([p+2,1,p,1])
+        # rhs = x*np.eye(self.dim).reshape([1,self.dim,1,self.dim])
         rhs = np.zeros(((p+2)*self.dim,self.dim))
         rhs[-2*self.dim:-self.dim,:] = np.eye(self.dim)
         rhs[-self.dim:,:] = np.eye(self.dim)
-        if without_boundary:
-            rhs = rhs[:-2*self.dim,:]
         return lblocks,rhs
-        
-
+    # def get_single_interval_design_block(self,chebint:ChebyshevInterval,chebint1:ChebyshevInterval):
+    #     return self.create_quadrature_block(chebint1,(chebint.degree,))
 

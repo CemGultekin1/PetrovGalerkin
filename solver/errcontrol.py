@@ -20,7 +20,6 @@ class LclErrControl(Control):
             cheb = gcheb[i]
             cheb1 = gcheb1[i]
             err = self.err_est.interval_error(cheb,cheb1)
-            logging.info(f'interval({i}) = {err},{self.tol}')
             ref.assign_refinement(i,err > self.tol)
                 
         

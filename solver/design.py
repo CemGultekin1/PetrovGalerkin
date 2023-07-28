@@ -1,97 +1,69 @@
 
 
-from typing import List, Tuple
+from typing import Tuple
 from chebyshev import GridwiseChebyshev,ChebyshevInterval
 from solver.lclsolve import LocalSysAllocator
 from solver.eqgen import EquationFactory
 from solver.linsolve import GlobalSystemSolver
 import numpy as np
 
-class DesignSupport:
-    evaluation_pts : List[float]
-    evaluation_edges : List[int]
-    def __init__(self) -> None:
-        pass
-    def __len__(self,)->int:...
-    def get_design_span(self,design_ind:int,)->Tuple[float,float]:...
-    def mean_value_matmul(self,):...
     
 class LossFunction:
-    dim:int
     def gradient(self,u:GridwiseChebyshev)->Tuple[np.ndarray,np.ndarray]:...
     
 
-class AdjointSolver:
-    def __init__(self,equfact:EquationFactory,lossfun:LossFunction,dim:int):
-        self.equfact = equfact
-        self.lossfun = lossfun
+class Edges2Coeffs:
+    def __init__(self,equfact:EquationFactory,dim:int):
+        self.averaging_edge_value = equfact.bndr.averaging_edge_value
         self.dim = dim
-    def averaging_edge_vec(self,ldeg:int,rdeg:int,):
-        leftside,rightside = self.equfact.bndr.averaging_edge_value(ldeg,rdeg)
-        return leftside,rightside
-    def product(self,ldeg:int,rdeg:int,dldavg:np.ndarray,output:np.ndarray,ind0:int,ind1:int):
-        ls,rs = self.averaging_edge_vec(ldeg,rdeg)
+    def product(self,ldeg:int,rdeg:int,dldedge:np.ndarray,output:np.ndarray,ind0:int,ind1:int):
+        ls,rs = self.averaging_edge_value(ldeg,rdeg)
         slc0 = slice(ind0,ind0 + len(ls))
         slc1 = slice(ind1,ind1 + len(rs))
-        output[slc0,:] += np.outer(ls,dldavg)
-        output[slc1,:] += np.outer(rs,dldavg)        
-    def get_adjoint(self,state:GridwiseChebyshev,globalsys:GlobalSystemSolver):
-        dldstate,dldesign = self.lossfun.gradient(state)
-        preadjoint = self.avg_transpose(dldstate,state.extended_ps,)
-        adjglb = globalsys.adjoint_system()
-        adjglb.rhs = preadjoint
-        adjglb.solve()      
-        adjoint_weights = adjglb.solution
-        adjoint = state.create_from_solution(adjoint_weights,self.dim)  
-        return adjoint,dldesign
-    def avg_transpose(self,dldavg:np.ndarray,degrees:np.ndarray,):        
-        dldavg = dldavg.reshape([-1,self.dim])
-        nedges = dldavg.shape[0]
+        output[slc0,:] += np.outer(ls,dldedge[0])
+        output[slc1,:] += np.outer(rs,dldedge[1])      
+    def transpose_edge_product(self,dldedge:np.ndarray,degrees:np.ndarray,):        
+        # dldedge = dldedge.reshape([-1,self.dim])
+        nedges = dldedge.shape[0]
         output = np.zeros((np.sum(degrees),self.dim),)
+        assert len(degrees) == dldedge.shape[0] + 1
         for i in range(nedges):
-            self.product(degrees[i],degrees[i+1],dldavg[i],output,i,i+1)
+            self.product(degrees[i],degrees[i+1],dldedge[i],output,i,i+1)
         return output.flatten()
     
     
-class IntervalDesignProduct:
-    def __init__(self,lsa:LocalSysAllocator):
-        self.local_sys_allocator = lsa
-    def __call__(self,solution:ChebyshevInterval,adjoint:ChebyshevInterval,design_gcheb:ChebyshevInterval)->float:
-        bmf,_ = self.local_sys_allocator.get_single_interval_blocks(solution, design_gcheb, without_boundary=True)
-        mat = bmf.mat_blocks[0].matblock
-        rhs = bmf.rhs_blocks[0].matblock
-        gchebr = -mat@solution.coeffs.flatten() + rhs
-        return gchebr @ adjoint.coeffs.flatten()
 
-    
-class GlobalDesignProduct(IntervalDesignProduct):
-    def __init__(self,des_sup:DesignSupport,lsa:LocalSysAllocator) -> None:
-        super().__init__(lsa)
-        self.support = des_sup        
-    def __call__(self,solution:GridwiseChebyshev,\
-                       adjoint:GridwiseChebyshev,\
-                        design_gcheb:GridwiseChebyshev):
-        gradient = []
-        for i in range(len(self.support)):
-            x0,x1 = self.support.get_design_span(i)
-            intervals = design_gcheb.find_touching_intervals(x0,x1)
-            fl =  0
-            for intv in intervals:
-                sltn,adj,dgch = solution[intv],adjoint[intv],design_gcheb[intv]
-                fl += super().__call__(sltn,adj,dgch)
-            gradient.append(fl)
-        return np.array(gradient)
-            
-class GradientFactory:
-    def __init__(self,equac:EquationFactory,\
-                lossfn:LossFunction,localsys:LocalSysAllocator,\
-                    dessup:DesignSupport,dim:int) -> None:
-        self.design_product = GlobalDesignProduct(dessup,localsys)
-        self.adjoint_solver = AdjointSolver(equac, lossfn,dim)
-        self.gradient = np.empty(0)
-    def get_gradient(self,solution:GridwiseChebyshev,design_gcheb:GridwiseChebyshev,glbsys:GlobalSystemSolver):
-        adjoint,dldesign = self.adjoint_solver.get_adjoint(solution,glbsys)
-        grad =  self.design_product(solution,adjoint,design_gcheb,)
-        return grad,dldesign
+class AdjointMethod(Edges2Coeffs):
+    def __init__(self,equac:EquationFactory,dim:int):
+        Edges2Coeffs.__init__(self,equac,dim)
+    def get_adjoint(self,state:GridwiseChebyshev,globalsys:GlobalSystemSolver,dloss_dstate:np.ndarray):
+        preadjoint = self.transpose_edge_product(dloss_dstate,state.extended_ps,)
+        adjglb = globalsys.adjoint_system()
+        adjglb.rhs = preadjoint
+        adjglb.solve()
+        adjoint_weights = adjglb.solution
         
+        admid = adjoint_weights[:-2*state.dim]
+        adhead = adjoint_weights[-2*state.dim:-state.dim]
+        adtail = adjoint_weights[-state.dim:]
+        adjoint_weights = np.concatenate([adhead,admid,adtail])
+        adjoint = state.create_from_solution(adjoint_weights,self.dim)  
+        return adjoint
+    
+    
+class DesignProduct(LocalSysAllocator):
+    def __init__(self,lsa:LocalSysAllocator):
+        self.__dict__.update(lsa.__dict__)
+    def interval_dot(self,solution:ChebyshevInterval,adjoint:ChebyshevInterval,design_gcheb:ChebyshevInterval)->float:
+        mat,rhs = self.create_quadrature_block(design_gcheb,solution.degree)
+        gchebr = mat@solution.coeffs.flatten() - rhs
+        return gchebr @ adjoint.coeffs.flatten()
+    def dot(self,solution:GridwiseChebyshev,\
+                       adjoint:GridwiseChebyshev,\
+                        design_gcheb:GridwiseChebyshev):        
+        gradient = []
+        for sltn,adj,dgch in zip(solution,adjoint,design_gcheb):
+            gradient.append(self.interval_dot(sltn,adj,dgch))
+        return np.array(gradient)
+
         

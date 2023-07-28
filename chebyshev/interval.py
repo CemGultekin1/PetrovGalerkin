@@ -169,7 +169,8 @@ class GridwiseChebyshev(Grid):
         if not self.edge_values.up_to_date:
             self.update_edge_values(old_head_tail=True)
         return self.edge_values.values.mean(axis = 1)
-            
+    def __iter__(self,):
+        return self.cheblist.__iter__()
     @property
     def dim(self,):
         return self.cheblist[0].coeffs.shape[1]
@@ -300,6 +301,11 @@ class GridwiseChebyshev(Grid):
         gg.edge_values = EdgeValues(new_cheblist,head_edge=head_edge,tail_edge=tail_edge)
         gg.edge_values.set_up_to_date(True)
         return gg
+    def to_solution(self,):
+        head = self.edge_values.values[0,0]
+        tail = self.edge_values.values[-1,1]
+        coeffs = np.concatenate([chb.coeffs.flatten() for chb in self.cheblist],)
+        return np.concatenate([head,coeffs,tail])
     def adopt_solution(self,solution:np.ndarray,dim:int):
         solution = solution.reshape([-1,dim])
         head_edge = solution[0]

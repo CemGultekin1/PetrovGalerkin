@@ -9,7 +9,7 @@ from solver.errcontrol import SolutionRefiner
 from solver.glbsys import GlobalSysAllocator, SparseGlobalSystem
 from .lclerr import LocalErrorEstimate
 from .linsolve import GlobalSystemSolver
-from solver.design import GradientFactory, LossFunction,DesignSupport
+from solver.design import AdjointMethod, DesignProduct
     
 @dataclass
 class PetrovGalerkinSolverSettings:
@@ -71,8 +71,10 @@ class LinearSolver(LinearBoundaryProblem,PetrovGalerkinSolverSettings):
             self.max_lcl_err,self.max_num_interval,self.max_grid_cond)
         self.solution = self.mergedfuns
         self.global_system_solver = None
+    def generate_empty_solution(self,):
+        return self.mergedfuns.new_grided_chebyshev(self.dim,degree = self.degree_increments[0])
     def refine_for_local_problems(self,):
-        self.solution = self.mergedfuns.new_grided_chebyshev(self.dim,degree = self.degree_increments[0])
+        self.solution = self.generate_empty_solution()
         max_iter_num = 128
         for i in range(max_iter_num):
             flag = self.solref.run_controls(self.solution,self.mergedfuns)
@@ -101,12 +103,12 @@ class LinearSolver(LinearBoundaryProblem,PetrovGalerkinSolverSettings):
 
         blocks = nags.create_blocks(self.mergedfuns,tuple(self.solution.ps))
         sgs = SparseGlobalSystem(blocks)
-        
-        
-        
+    
         gss = GlobalSystemSolver(sgs)
         gss.solve()
         self.global_system_solver = gss
         self.solution = gss.get_wrapped_solution(self.solution,inplace = True)
-    def get_gradient_factory(self,lossfun:LossFunction,design_support:DesignSupport):
-        return GradientFactory(self.equfactory,lossfun,self.lclerr.lcl_sys_alloc,design_support,self.dim)
+    def adjoint_method(self,):
+        return AdjointMethod(self.equfactory,self.dim)
+    def design_product(self,):
+        return DesignProduct(self.lclerr.lcl_sys_alloc)

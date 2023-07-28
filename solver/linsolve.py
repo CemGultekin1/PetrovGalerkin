@@ -20,7 +20,7 @@ class GlobalSystemSolver(SparseGlobalSystem):
         return gcheb.create_from_solution(self.solution,self.dim)
     def adjoint_system(self,):
         gss = GlobalSystemSolver(self)
-        gss.mat = gss.mat.transpose()
+        gss.mat = -gss.mat.transpose()
         return gss
         
         

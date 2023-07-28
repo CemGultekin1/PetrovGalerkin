@@ -19,13 +19,15 @@ class EquationFactory:
         lef.bndr_cond = self.bndr.create_boundary_condition_element_factory(bcond)
         return lef
     def generate_interior_matrices(self,center_chebint:ChebyshevInterval,\
-                            left_degree:int,right_degree:int,target_degree:int):
-        center_degree = target_degree#center_chebint.degree
-        matfun,rhsfun = center_chebint.separate_funs()
-        interrelem = self.interr.generate_element(center_degree,matfun,rhsfun,).to_matrix_form()
-        bndrelem = self.bndr.generate_element(left_degree,center_degree,right_degree,).to_matrix_form(self.dim)
+                            left_degree:int,right_degree:int,target_degree:int,):
+
+        interrelem = self.generate_local_quadratures(center_chebint,target_degree,).to_matrix_form()
+        bndrelem = self.bndr.generate_element(left_degree,target_degree,right_degree,).to_matrix_form(self.dim)
         return BlockColumns(interrelem,bndrelem)
-    
+    def generate_local_quadratures(self,center_chebint:ChebyshevInterval,target_degree:int,):
+        matfun,rhsfun = center_chebint.separate_funs()
+        interrelem = self.interr.generate_element(target_degree,matfun,rhsfun,)
+        return interrelem
     def generate_boundary_blocks(self,center_degree:int,\
                             left_degree:int,right_degree:int,):
         bndrelem = self.bndr.generate_element(left_degree,center_degree,right_degree,).to_matrix_form(self.dim)

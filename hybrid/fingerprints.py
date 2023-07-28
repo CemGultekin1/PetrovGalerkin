@@ -6,7 +6,10 @@ from chebyshev import GridwiseChebyshev
 
 
 class HybridStateSystem(TimeDependentHSS):
-    def __init__(self,num:int = -1,time:float = -1.,mode:str = 'org',design_param :str = 'theta1',theta:np.ndarray = None) -> None:
+    def __init__(self,num:int = -1,time:float = -1.,\
+                mode:str = 'org',design_param :str = 'theta1',\
+                    theta:np.ndarray = None,trf:np.ndarray = None,\
+                        ) -> None:
         if theta is None:            
             if time > 0:
                 n = np.floor(time/self.tr).astype(int)
@@ -20,12 +23,16 @@ class HybridStateSystem(TimeDependentHSS):
             
         self.design_param = design_param
         self.mode = mode
-        np.random.seed(0)
-        
-        trfs = np.ones((n-1))*5e-4
+        if trf is None:
+            np.random.seed(0)        
+            trf = np.ones((n-1))*5e-4
         # alphas = (-1)**np.arange(n)*alphas
-        super().__init__(theta,trfs)
-        self.dim = 2
+
+        super().__init__(theta,trf)
+        # self.dim = 2
+    @property
+    def dim(self,):
+        return len(self.signal_names)
     @property
     def signal_names(self,):
         snms = super().signal_names
@@ -33,7 +40,9 @@ class HybridStateSystem(TimeDependentHSS):
             return snms
         prms = super().param_names
         return [f'd{snm}/d{prm}' for snm in snms for prm in prms]
-    def edges(self,full:bool = False):
+    @property
+    def starting_edges(self,):
+        full = True
         if full:
             x0 = self.tr*np.arange(1,len(self.trf_seq)+1) - self.trf_seq/2
             x1 = self.tr*np.arange(1,len(self.trf_seq)+1) + self.trf_seq/2
@@ -73,33 +82,53 @@ class HybridStateSystem(TimeDependentHSS):
 
 class HybridStateSolution(GridwiseChebyshev,HybridStateSystem):
     def __init__(self, gcheb:GridwiseChebyshev,theta_fun:np.ndarray,trf_fun:np.ndarray,**kwargs) -> None:
-        HybridStateSystem.__init__(self,theta_fun,trf_fun,**kwargs)
+        HybridStateSystem.__init__(self,theta = theta_fun,trf = trf_fun,**kwargs)
         self.__dict__.update(gcheb.__dict__)
-        
+    # def group_intervals(self,):
+    #     stedge = self.starting_edges
+    #     for st0,st1 in zip(stedge[:-1],stedge[1:]):
+    #         yield self.find_touching_intervals(st0,st1)
+    # def design_group_intervals(self,):
+    #     for intervals in self.group_intervals():
+    #         pass
 class Fingerprints:
     def __init__(self,hss:HybridStateSolution) -> None:
         
         self.fingerprint_times = np.arange(1,hss.num_fp)*hss.tr
         self.theta_seq = hss.theta_seq
+        self.dim = hss.dim//2
+        edges = hss.find_closest_edges(self.fingerprint_times)
+        self.edges = edges
+        self.edge_values = hss.edge_values.values
         
-        fingerprint_edges = hss.find_closest_edges(self.fingerprint_times)
-        self.edges = fingerprint_edges
-        avgvals = hss.edge_values.values.mean(axis = 1)        
-        avg_theta = (hss.theta_seq[1:]+ hss.theta_seq[:-1])/2
-        self.avg_state_vals = avgvals
+        avg_theta = (self.theta_seq[1:]+ self.theta_seq[:-1])/2
+        self.avg_state_vals = self.edge_values.mean(axis = 1)        
         self.sine_weights = np.sin(avg_theta).reshape([-1,1])
-        self.states :np.ndarray= avgvals[fingerprint_edges,::2]
-        self.values:np.ndarray = self.states*self.sine_weights
+        self.states :np.ndarray= self.avg_state_vals[self.edges,::2]
+        self.values = self.states*self.sine_weights
+        
+    def update(self,):
+        avg_theta = (self.theta_seq[1:]+ self.theta_seq[:-1])/2
+        self.avg_state_vals = self.edge_values.mean(axis = 1)        
+        self.sine_weights = np.sin(avg_theta).reshape([-1,1])
+        self.states :np.ndarray= self.avg_state_vals[self.edges,::2]
+        self.values = self.states*self.sine_weights
         
     def state_avg_edges_derivative_inner_product(self,dldf:np.ndarray):
         '''
         given dldf, returns dldu_avg
         f = u*sin
-        dldu = dldf @ dfdu = dldf * sin
+        dldu_avg = dldf @ dfdu_avg = dldf * sin
         '''
         dldu_avg = np.zeros(self.avg_state_vals.shape)
         dldu_avg[self.edges,::2] = dldf*self.sine_weights
         return dldu_avg
+    def state_edges_derivative_inner_product(self,dldf:np.ndarray):
+        dldu_avg = self.state_avg_edges_derivative_inner_product(dldf)
+        zmat = np.zeros(self.edge_values.shape)
+        zmat[:,0,:] = dldu_avg
+        zmat[:,1,:] = dldu_avg
+        return zmat
     def design_derivative_inner_product(self,dldf:np.ndarray):
         '''
         given dldf returns dldtheta

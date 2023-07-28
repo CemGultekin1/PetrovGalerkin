@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Any, Tuple
 import numpy as np
 from hybrid.symeq import org_sys,params_sys,design_sys,vnames
-
+from chebyshev import GridwiseChebyshev
 
 def non_scalar_input_wrapper(fun):
     def non_scalar_wrapped_fun(self,*args, **kwargs):
@@ -86,7 +86,32 @@ class ThetaFun:
         assert len(trf_seq) == len(theta_seq) - 1
         self.total_time = self.tr*len(theta_seq)
         self.num_fp = len(theta_seq)
-        self.last_t = None
+    def give_theta_interval(self,i:int,):
+        if i==0:
+            x11 = self.tr*(i+1) + self.trf_seq[i]/2
+            x00 = 0
+            return (),(x00,x11)
+        elif i == self.num_fp - 1:
+            x11 = self.tr*(i+1)
+            x01 = self.tr*i + self.trf_seq[i-1]/2
+            x00 = self.tr*i - self.trf_seq[i-1]/2
+            return (x00,x01), (x01,x11)
+        else:
+            x11 = self.tr*(i+1) + self.trf_seq[i]/2
+            # x10 = self.tr*(i+1) - self.trf_seq[i+1]/2
+            x01 = self.tr*i + self.trf_seq[i-1]/2
+            x00 = self.tr*i - self.trf_seq[i-1]/2
+            return (x00,x01),(x01,x11)
+    def design_gradient_collection(self,dldth1:np.ndarray,dldth2:np.ndarray,dldf_dfdth:np.ndarray,solution:GridwiseChebyshev):
+        for i in range(dldf_dfdth.shape[0]):
+            theta2int,theta1int = self.give_theta_interval(i)
+            if bool(theta2int):
+                tchints2 = solution.find_touching_intervals(*theta2int)
+                dldf_dfdth[i] += np.sum(dldth2[tchints2])
+            if bool(theta1int):
+                tchints1 = solution.find_touching_intervals(*theta1int)
+                dldf_dfdth[i] += np.sum(dldth1[tchints1])
+        return dldf_dfdth
     def __call__(self,t):
         if not np.isscalar(t):
             jac = list(map(self.__call__,t))
@@ -132,3 +157,4 @@ class TimeDependentHSS(HybridSystemEquations,ThetaFun):
             #         return fun(*args,**kwargs)
             return wrapped_fun                
         return super().__getattribute__(__name)
+    
