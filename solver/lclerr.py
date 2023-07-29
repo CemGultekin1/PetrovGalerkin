@@ -1,3 +1,4 @@
+from solver.dimensional import Dimensional
 from .linsolve import LocalSystemSolver
 import numpy as np
 from chebyshev import NumericType,coeffevl,GridwiseChebyshev,ChebyshevInterval,coeffgen,ResidualNorm
@@ -94,10 +95,9 @@ class OrthogonalResidueNorm:
     def orthogonal_norm(self,res:ResidualFunction,degree:int):
         return self.resnorm.residual_norm_from_fun(res,res.interval,degree = degree)
         
-class LocalErrorEstimate:
-    def __init__(self,dim:int,equfact:EquationFactory) -> None:
-        self.dim = dim
-        self.lcl_sys_alloc = LocalSysAllocator(dim,equfact)
+class LocalErrorEstimate(Dimensional):
+    def __init__(self,equfact:EquationFactory) -> None:
+        self.lcl_sys_alloc = LocalSysAllocator(equfact)
         self.orth_res_norm = OrthogonalResidueNorm(equfact.max_degree)
     def interval_error(self,lclcheb:ChebyshevInterval,problem_components:ChebyshevInterval):
         blocks,rhs = self.lcl_sys_alloc.get_single_interval_blocks(lclcheb,problem_components)

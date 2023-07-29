@@ -1,35 +1,16 @@
 from typing import Any
-from hybrid.eqtns import TimeDependentHSS
+from hybrid.eqtns import TimeDependentHSS,DesignFunctions
 import numpy as np
 from chebyshev import GridwiseChebyshev
-
+from solver.linsolve import GlobalSystemSolver
 
 
 class HybridStateSystem(TimeDependentHSS):
-    def __init__(self,num:int = -1,time:float = -1.,\
-                mode:str = 'org',design_param :str = 'theta1',\
-                    theta:np.ndarray = None,trf:np.ndarray = None,\
-                        ) -> None:
-        if theta is None:            
-            if time > 0:
-                n = np.floor(time/self.tr).astype(int)
-            elif num > 0:
-                n = num
-            else:
-                raise Exception
-            theta = np.random.rand(n)*np.pi/4 + np.pi/4
-        else:
-            n = len(theta)
-            
+    def __init__(self,driving_functions:DesignFunctions = DesignFunctions( np.ones((2),)*np.pi/2,np.ones((1,))*5e-4),\
+                mode:str = 'org',design_param :str = 'theta1',**kwargs) -> None:
         self.design_param = design_param
         self.mode = mode
-        if trf is None:
-            np.random.seed(0)        
-            trf = np.ones((n-1))*5e-4
-        # alphas = (-1)**np.arange(n)*alphas
-
-        super().__init__(theta,trf)
-        # self.dim = 2
+        super().__init__(driving_functions.theta_seq,driving_functions.trf_seq,**kwargs)
     @property
     def dim(self,):
         return len(self.signal_names)
@@ -53,10 +34,7 @@ class HybridStateSystem(TimeDependentHSS):
         else:
             x = self.tr*np.arange(self.num_fp+1)       
             return tuple(x.tolist())
-        
-    def fingerprint_edges(self,):
-        return self.tr*np.arange(1,self.num_fp)
-        
+                    
     def matfun(self,x,):
         if self.mode == 'org':
             return self.org_sys_mat(x)
@@ -80,22 +58,25 @@ class HybridStateSystem(TimeDependentHSS):
             return  self.design_sys_bndr(0,name = self.design_param)
 
 
-class HybridStateSolution(GridwiseChebyshev,HybridStateSystem):
-    def __init__(self, gcheb:GridwiseChebyshev,theta_fun:np.ndarray,trf_fun:np.ndarray,**kwargs) -> None:
-        HybridStateSystem.__init__(self,theta = theta_fun,trf = trf_fun,**kwargs)
+class HybridStateSolution(GridwiseChebyshev,):
+    def __init__(self, gcheb:GridwiseChebyshev,theta_fun:np.ndarray,trf_fun:np.ndarray,gss:GlobalSystemSolver,hss:HybridStateSystem) -> None:
         self.__dict__.update(gcheb.__dict__)
-    # def group_intervals(self,):
-    #     stedge = self.starting_edges
-    #     for st0,st1 in zip(stedge[:-1],stedge[1:]):
-    #         yield self.find_touching_intervals(st0,st1)
-    # def design_group_intervals(self,):
-    #     for intervals in self.group_intervals():
-    #         pass
+        self.global_sys_sol = gss
+        self.theta_seq = theta_fun
+        self.trf_seq = trf_fun
+        self.params_dict = hss.params_dict
+        self.signal_names = hss.signal_names
+        self.num_fp = len(self.theta_seq)
+        self.tr = hss.tr
+    
 class Fingerprints:
-    def __init__(self,hss:HybridStateSolution) -> None:
-        
-        self.fingerprint_times = np.arange(1,hss.num_fp)*hss.tr
-        self.theta_seq = hss.theta_seq
+    def __init__(self,hss:HybridStateSolution) -> None:       
+        self.num_fp = hss.num_fp 
+        self.tr =hss.tr
+        self._signal_names = hss.signal_names[::2]
+        self.fingerprint_times = self.fingerprint_edges()
+        self.theta_seq = hss.theta_seq       
+        self.params_dict = hss.params_dict 
         self.dim = hss.dim//2
         edges = hss.find_closest_edges(self.fingerprint_times)
         self.edges = edges
@@ -106,6 +87,14 @@ class Fingerprints:
         self.sine_weights = np.sin(avg_theta).reshape([-1,1])
         self.states :np.ndarray= self.avg_state_vals[self.edges,::2]
         self.values = self.states*self.sine_weights
+    @property
+    def signal_names(self,):
+        if len(self._signal_names) == 1:
+            return self._signal_names[0]
+        else:
+            return self._signal_names
+    def fingerprint_edges(self,):
+        return self.tr*np.arange(1,self.num_fp)
         
     def update(self,):
         avg_theta = (self.theta_seq[1:]+ self.theta_seq[:-1])/2

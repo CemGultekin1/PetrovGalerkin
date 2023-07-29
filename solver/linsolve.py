@@ -2,11 +2,13 @@ import logging
 from typing import Tuple
 from scipy.sparse.linalg import spsolve
 import numpy as np
+
+from solver.matalloc import BlockedMatrixFrame
 from .glbsys import SparseGlobalSystem,DenseLocalSystem
 from chebyshev import GridwiseChebyshev
 class GlobalSystemSolver(SparseGlobalSystem):
-    def __init__(self,spglblsys:SparseGlobalSystem) -> None:
-        self.__dict__.update(spglblsys.__dict__)
+    def __init__(self,blocks:BlockedMatrixFrame) -> None:
+        super().__init__(blocks)
         self.solution = np.empty(0)
     def solve(self,):
         if self.solution.size == 0:
@@ -19,8 +21,10 @@ class GlobalSystemSolver(SparseGlobalSystem):
             return gcheb
         return gcheb.create_from_solution(self.solution,self.dim)
     def adjoint_system(self,):
-        gss = GlobalSystemSolver(self)
+        gss = GlobalSystemSolver.__new__(GlobalSystemSolver,)
+        gss.__dict__.update(self.__dict__)
         gss.mat = -gss.mat.transpose()
+        gss.solution = np.empty(0)
         return gss
         
         

@@ -4,6 +4,7 @@ from typing import Tuple
 import numpy as np
 from chebyshev import NumericFunType,ListOfFuns,GridwiseChebyshev,RepresentationRefiner
 from solver.bndrcond import BoundaryCondition
+from solver.dimensional import Dimensional
 from solver.eqgen import EquationFactory
 from solver.errcontrol import SolutionRefiner
 from solver.glbsys import GlobalSysAllocator, SparseGlobalSystem
@@ -43,72 +44,81 @@ class PetrovGalerkinSolverSettings:
     def min_degree(self,):
         return self.degree_increments[0]
         
-            
+BoundaryConditionType = Tuple[np.ndarray,np.ndarray,np.ndarray]
 class LinearBoundaryProblem:
     def __init__(self,\
             funs:Tuple[NumericFunType,NumericFunType] = (),\
-            boundary_condition: Tuple[np.ndarray,np.ndarray,np.ndarray] = (np.empty(0,),np.empty(0,),np.empty(0)),\
+            boundary_condition: BoundaryConditionType = (np.empty((0,0)),np.empty((0,0)),np.empty(0)),\
             edges :Tuple[float,...] = (0.,1.),) -> None:
         self.matfun, self.rhsfun = funs
         self.boundary_condition = BoundaryCondition(*boundary_condition)
         self.edges = edges
         self.dim = self.boundary_condition.dim
-    
-class LinearSolver(LinearBoundaryProblem,PetrovGalerkinSolverSettings):
-    def __init__(self,pgs:PetrovGalerkinSolverSettings, lbp:LinearBoundaryProblem)-> None:
-        self.__dict__.update(lbp.__dict__)  
-        self.__dict__.update(pgs.__dict__)        
-        self.listfuns = ListOfFuns(self.matfun,self.rhsfun)
-        self.flatlistfuns = self.listfuns.flatten()        
-        if len(lbp.edges)>2:
-            self.mergedfuns = GridwiseChebyshev.from_function_and_edges(self.flatlistfuns,self.min_degree,lbp.edges)            
-        elif len(lbp.edges) == 2:
-            self.mergedfuns = GridwiseChebyshev.from_function(self.flatlistfuns,self.min_degree,*lbp.edges)
-        self.equfactory  = EquationFactory(self.dim,pgs.max_degree,self.boundary_condition)
-        self.lclerr = LocalErrorEstimate(self.dim,self.equfactory)
+    def setup_boundary_condition(self,boundary_condition:BoundaryConditionType):
+        self.boundary_condition = BoundaryCondition(*boundary_condition)
+        
+class LinearSolver(PetrovGalerkinSolverSettings,Dimensional):
+    def __init__(self,pgs:PetrovGalerkinSolverSettings, )-> None:
+        Dimensional.__init__(self,)
+        self.__dict__.update(pgs.__dict__)                       
+        self.equfactory  = EquationFactory(pgs.max_degree,)
+        self.lclerr = LocalErrorEstimate(self.equfactory)
         self.repref = RepresentationRefiner(self.degree_increments,self.max_rep_err,self.max_num_interval,self.max_grid_cond)
         self.solref = SolutionRefiner(self.lclerr,self.degree_increments,\
             self.max_lcl_err,self.max_num_interval,self.max_grid_cond)
-        self.solution = self.mergedfuns
-        self.global_system_solver = None
-    def solve(self,):...
-    def generate_empty_solution(self,):
-        return self.mergedfuns.new_grided_chebyshev(self.dim,degree = self.degree_increments[0])
-    def refine_for_local_problems(self,):
-        self.solution = self.generate_empty_solution()
+        self.global_sys_allocator = GlobalSysAllocator(self.equfactory)
+    def solve(self,lbp:LinearBoundaryProblem):
+        dim = lbp.dim
+        self.set_dim(dim)
+        self.equfactory.setup_for_operations(lbp.boundary_condition)
+        
+        listfuns = ListOfFuns(lbp.matfun,lbp.rhsfun)
+        flatlistfuns = listfuns.flatten()        
+        if len(lbp.edges)>2:
+            mergedfuns = GridwiseChebyshev.from_function_and_edges(flatlistfuns,self.min_degree,lbp.edges)            
+        elif len(lbp.edges) == 2:
+            mergedfuns = GridwiseChebyshev.from_function(flatlistfuns,self.min_degree,*lbp.edges)
+        mergedfuns = self.refine_for_representation(mergedfuns)
+        solution = self.refine_for_local_problems(mergedfuns)
+
+        blocks = self.global_sys_allocator.create_blocks(mergedfuns,tuple(solution.ps))
+        gss = GlobalSystemSolver(blocks)
+        gss.solve()
+        solution = gss.get_wrapped_solution(solution,inplace = True)
+        return solution,gss
+        
+
+    def refine_for_local_problems(self,mergedfuns:GridwiseChebyshev):
+        solution = mergedfuns.new_grided_chebyshev(self.dim,degree = self.degree_increments[0])
         max_iter_num = 128
+        refinement_happened_flag = False
         for i in range(max_iter_num):
-            flag = self.solref.run_controls(self.solution,self.mergedfuns)
+            flag = self.solref.run_controls(solution,mergedfuns)
             if flag:
                 break
-            self.solref.run_refinements(self.solution,self.mergedfuns)
-        self.mergedfuns.update_edge_values()
-        dims = [self.solution.cheblist[i].dim for i in range(self.solution.num_interval)]
+            self.solref.run_refinements(solution,mergedfuns)
+            refinement_happened_flag = True
+        if refinement_happened_flag:
+            mergedfuns.update_edge_values()
+        dims = [solution.cheblist[i].dim for i in range(solution.num_interval)]
         dims = np.array(dims)
         if not np.all(dims==dims[0]):
             logging.error(f'{dims.tolist()}')
-            dims = [self.mergedfuns.cheblist[i].dim for i in range(self.mergedfuns.num_interval)]
+            dims = [mergedfuns.cheblist[i].dim for i in range(mergedfuns.num_interval)]
             logging.error(f'{dims}')
             raise Exception
-        self.solution.update_edge_values()
-    def refine_for_representation(self,):
+        solution.update_edge_values()
+        return solution
+    def refine_for_representation(self,mergedfuns:GridwiseChebyshev):
         max_iter_num = 256
         for _ in range(max_iter_num):            
-            flag = self.repref.run_controls(self.mergedfuns)
+            flag = self.repref.run_controls(mergedfuns)
             if flag:
                 break
-            self.repref.run_refinements(self.mergedfuns)
-        self.mergedfuns.update_edge_values()
-    def solve(self,):
-        nags = GlobalSysAllocator(self.dim,self.equfactory)
-
-        blocks = nags.create_blocks(self.mergedfuns,tuple(self.solution.ps))
-        sgs = SparseGlobalSystem(blocks)
-    
-        gss = GlobalSystemSolver(sgs)
-        gss.solve()
-        self.global_system_solver = gss
-        self.solution = gss.get_wrapped_solution(self.solution,inplace = True)
+            self.repref.run_refinements(mergedfuns)
+        mergedfuns.update_edge_values()
+        return mergedfuns
+        
     def adjoint_method(self,):
         return AdjointMethod(self.equfactory,self.dim)
     def design_product(self,):

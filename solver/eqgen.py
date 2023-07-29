@@ -1,18 +1,25 @@
+from typing import List
+from solver.dimensional import Dimensional
 from .bndrcond import BoundaryCondition
 from .matalloc import BlockColumns, TriRowColumn
 from .boundary import BoundaryElementFactory
 from .interior import InteriorElementFactory
 from chebyshev import ChebyshevInterval
-
-class EquationFactory:
-    def __init__(self,dim:int,max_degree:int,boundary_condition:BoundaryCondition) -> None:        
-        self.dim = dim
+import numpy as np
+class EquationFactory(Dimensional):
+    def __init__(self,max_degree:int,boundary_condition:BoundaryCondition = BoundaryCondition(np.empty((0,0)),np.empty((0,0)),np.empty(0,)),) -> None:        
+        super().__init__()
         self.max_degree = max_degree
         self.interr = InteriorElementFactory(max_degree)
         self.interr.fillup()
         self.bndr = BoundaryElementFactory(max_degree)  
         self.bndr.fillup()
         self.bndr_cond = self.bndr.create_boundary_condition_element_factory(boundary_condition)
+        self.setup_handle :List[EquationFactory] = []
+    def setup_for_operations(self,boundary_condition:BoundaryCondition):
+        self.bndr_cond = self.bndr.create_boundary_condition_element_factory(boundary_condition)
+        for eq in self.setup_handle:
+            eq.setup_for_operations(boundary_condition)
     def change_boundary_condition(self,bcond:BoundaryCondition)->'EquationFactory':
         lef = EquationFactory.__new__(EquationFactory)
         lef.__dict__.update(self.__dict__)

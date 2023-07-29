@@ -1,6 +1,8 @@
+from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any, Tuple
+from typing import Any, List, Tuple
 import numpy as np
+from hybrid.handles import DesignParameteric, Parameteric
 from hybrid.symeq import org_sys,params_sys,design_sys,vnames
 from chebyshev import GridwiseChebyshev
 
@@ -18,14 +20,29 @@ def boundary_wrapper(fun):
         rhs = np.zeros((b0.shape[0],))
         return b0,b1,rhs
     return boundary_wrapped_fun
-@dataclass
-class HybridSystemEquations:
-    m0s:float = 0.1
-    invt1:float = 1/1.6
-    invt2f:float = 1/.065
-    r:float = 30    
-    t2s:float = 60e-6
-    _params:Tuple[float,...] = ()
+
+default_params_dict = dict(
+    m0s = 0.1,
+    invt1 = 1/1.6,
+    invt2f = 1/.065,
+    r = 30,    
+    t2s = 60e-6
+)
+
+class HybridSystemEquations(Parameteric):
+    params_list :List[str] = list(default_params_dict.keys())    
+    _params:Tuple[float,...]
+    def __init__(self,**kwargs) -> None:
+        kwargs1 = deepcopy(default_params_dict)
+        kwargs1.update(kwargs)
+        self._params = ()
+        self.__dict__.update(kwargs1)
+    def change_of_parameters(self, **kwargs):
+        self._params = ()
+        return super().change_of_parameters(**kwargs)
+    @property
+    def params_dict(self,):
+        return dict(zip(self.solved_param_names,self.params))
     @property
     def params(self,):
         if not bool(self._params):
@@ -38,6 +55,10 @@ class HybridSystemEquations:
     def param_names(self,):
         vn = [key for key in vnames if key in self.__dict__]
         return ['m'] + list(vn)
+    @property
+    def solved_param_names(self,):
+        vn = [key for key in vnames if key in self.__dict__]
+        return list(vn)
     @property
     def param_values_str(self,):
         prmstrs = ["{:.1e}".format(prm) for prm in self.params]
@@ -78,14 +99,20 @@ class HybridSystemEquations:
         return design_sys(*self.params,*args,bndr_flag=True,name = name)
     
     
-class ThetaFun:
+class DesignFunctions(DesignParameteric):
     tr:float = 3.5e-3
+    params_list :List[str] = []
+    design_params_list : List[str]  = 'theta_seq trf_seq'.split()
     def __init__(self,theta_seq:np.ndarray,trf_seq:np.ndarray) -> None:
         self.theta_seq = theta_seq
         self.trf_seq = trf_seq
         assert len(trf_seq) == len(theta_seq) - 1
-        self.total_time = self.tr*len(theta_seq)
-        self.num_fp = len(theta_seq)
+    @property
+    def total_time(self,):
+        return self.tr*len(self.theta_seq)
+    @property
+    def num_fp(self,):
+        return len(self.theta_seq)
     def give_theta_interval(self,i:int,):
         if i==0:
             x11 = self.tr*(i+1) + self.trf_seq[i]/2
@@ -139,11 +166,12 @@ class ThetaFun:
         reltime = dst*trf                
         
         return np.array([th0,th1,reltime,1/trf,1])
-
-class TimeDependentHSS(HybridSystemEquations,ThetaFun):
+    
+class TimeDependentHSS(HybridSystemEquations,DesignFunctions):
     def __init__(self,theta_fun:np.ndarray,trf_fun:np.ndarray,**kwargs):
-        HybridSystemEquations.__init__(self,**kwargs)
-        ThetaFun.__init__(self,theta_fun,trf_fun)
+        HybridSystemEquations.__init__(self,**kwargs)        
+        DesignFunctions.__init__(self,theta_fun,trf_fun)
+        
     def __getattribute__(self, __name: str) -> Any:
         if 'sys' in __name:
             fun = super().__getattribute__(__name)
@@ -158,3 +186,20 @@ class TimeDependentHSS(HybridSystemEquations,ThetaFun):
             return wrapped_fun                
         return super().__getattribute__(__name)
     
+    
+class DesignSequences(DesignFunctions):
+    def __init__(self, n:int = 2,random_initialization_seed :int = -1,theta_seq:np.ndarray = None,trf_seq:np.ndarray = None) -> None:
+        if theta_seq is None:
+            if random_initialization_seed >= 0:
+                np.random.seed(random_initialization_seed)
+                theta_seq = np.random.rand(n)*np.pi/2
+            else:
+                theta_seq = np.ones((n,))*np.pi/2
+        else:
+            theta_seq = theta_seq
+        if trf_seq is None:
+            trf_seq = np.ones((n-1,))*5e-4
+        else:
+            trf_seq = trf_seq
+            assert len(trf_seq) == len(theta_seq) - 1
+        super().__init__(theta_seq, trf_seq)

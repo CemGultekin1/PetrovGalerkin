@@ -1,5 +1,7 @@
 import logging
 from typing import Tuple
+
+from solver.dimensional import Dimensional
 from .matalloc import BlockedMatrixFrame
 import numpy as np
 from scipy.sparse import lil_matrix
@@ -7,10 +9,10 @@ from .eqgen import EquationFactory
 from .matalloc import BlockedMatrixFrame
 from chebyshev import GridwiseChebyshev,ChebyshevInterval
 
-class GlobalSysAllocator:
-    def __init__(self,dim:int,lcleq:EquationFactory) -> None:
+class GlobalSysAllocator(Dimensional):
+    def __init__(self,lcleq:EquationFactory) -> None:
         self.local_equation = lcleq
-        self.dim = dim
+        super().__init__()
     def create_quadrature_block(self,chebint:ChebyshevInterval,target_degree:int):
         interrelem =  self.local_equation.generate_local_quadratures(chebint,target_degree)
         return interrelem.mat_rhs_matrices()

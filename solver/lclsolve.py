@@ -5,11 +5,14 @@ import numpy as np
 from solver.glbsys import GlobalSysAllocator
 from solver.interior import AdjointInteriorElementFactory
 class LocalEquationFactory(EquationFactory):
-    def __init__(self, leqf:EquationFactory) -> None:
-        self.bndr_cond = self.generate_boundary_condition(leqf.dim,)
+    def __init__(self, leqf:EquationFactory) -> None:        
         self.__dict__.update(leqf.__dict__)
         self.interr = AdjointInteriorElementFactory(leqf.interr)
-        
+        leqf.setup_handle.append(self,)
+    def setup_for_operations(self, boundary_condition: BoundaryCondition):
+        # super().setup_for_operations(boundary_condition)
+        # bndr_cond = self.generate_boundary_condition(self.dim,)
+        self.bndr_cond = self.bndr.create_boundary_condition_element_factory(boundary_condition)
     @classmethod
     def generate_boundary_condition(cls,dim:int):        
         bone = np.eye(dim)
@@ -18,8 +21,8 @@ class LocalEquationFactory(EquationFactory):
         return BoundaryCondition(bone,bzer,crhs)
 
 class LocalSysAllocator(GlobalSysAllocator):
-    def __init__(self, dim: int,lcleq: EquationFactory) -> None:
-        super().__init__(dim, lcleq)
+    def __init__(self, lcleq: EquationFactory) -> None:
+        super().__init__(lcleq)
         self.local_equation =  LocalEquationFactory(lcleq)
 
         
