@@ -71,6 +71,7 @@ class LinearSolver(LinearBoundaryProblem,PetrovGalerkinSolverSettings):
             self.max_lcl_err,self.max_num_interval,self.max_grid_cond)
         self.solution = self.mergedfuns
         self.global_system_solver = None
+    def solve(self,):...
     def generate_empty_solution(self,):
         return self.mergedfuns.new_grided_chebyshev(self.dim,degree = self.degree_increments[0])
     def refine_for_local_problems(self,):

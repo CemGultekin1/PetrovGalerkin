@@ -18,8 +18,8 @@ class Edges2Coeffs:
         self.dim = dim
     def product(self,ldeg:int,rdeg:int,dldedge:np.ndarray,output:np.ndarray,ind0:int,ind1:int):
         ls,rs = self.averaging_edge_value(ldeg,rdeg)
-        slc0 = slice(ind0,ind0 + len(ls))
-        slc1 = slice(ind1,ind1 + len(rs))
+        slc0 = slice(ind0,ind0 + ldeg)
+        slc1 = slice(ind1,ind1 + rdeg)
         output[slc0,:] += np.outer(ls,dldedge[0])
         output[slc1,:] += np.outer(rs,dldedge[1])      
     def transpose_edge_product(self,dldedge:np.ndarray,degrees:np.ndarray,):        
@@ -27,8 +27,10 @@ class Edges2Coeffs:
         nedges = dldedge.shape[0]
         output = np.zeros((np.sum(degrees),self.dim),)
         assert len(degrees) == dldedge.shape[0] + 1
+        cdeg = np.cumsum(degrees)
+        cdeg = np.insert(cdeg,0,0)
         for i in range(nedges):
-            self.product(degrees[i],degrees[i+1],dldedge[i],output,i,i+1)
+            self.product(degrees[i],degrees[i+1],dldedge[i],output,cdeg[i],cdeg[i+1])
         return output.flatten()
     
     
@@ -43,9 +45,9 @@ class AdjointMethod(Edges2Coeffs):
         adjglb.solve()
         adjoint_weights = adjglb.solution
         
-        admid = adjoint_weights[:-2*state.dim]
-        adhead = adjoint_weights[-2*state.dim:-state.dim]
-        adtail = adjoint_weights[-state.dim:]
+        admid = adjoint_weights[:-2*self.dim]
+        adhead = adjoint_weights[-2*self.dim:-self.dim]
+        adtail = adjoint_weights[-self.dim:]
         adjoint_weights = np.concatenate([adhead,admid,adtail])
         adjoint = state.create_from_solution(adjoint_weights,self.dim)  
         return adjoint
