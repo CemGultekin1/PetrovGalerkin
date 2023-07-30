@@ -31,6 +31,14 @@ class EquationFactory(Dimensional):
         interrelem = self.generate_local_quadratures(center_chebint,target_degree,).to_matrix_form()
         bndrelem = self.bndr.generate_element(left_degree,target_degree,right_degree,).to_matrix_form(self.dim)
         return BlockColumns(interrelem,bndrelem)
+    def generate_quad_interior_time_derivatives_element(self,center_chebint:ChebyshevInterval,target_degree:int,left :bool= False):
+        matfun,rhsfun = center_chebint.separate_funs()
+        mat_rhs = self.interr.generate_quad_interior_time_derivatives_element(target_degree,matfun,rhsfun,left = left).mat_rhs_matrices()
+        return mat_rhs
+    def generate_quad_boundary_time_derivatives_element(self,center_chebint:ChebyshevInterval,target_degree:int,left:bool = True):
+        matfun,rhsfun = center_chebint.separate_funs()
+        mat_rhs = self.interr.generate_quad_boundry_time_derivatives_element(target_degree,matfun,rhsfun,left = left).mat_rhs_matrices()       
+        return  mat_rhs
     def generate_local_quadratures(self,center_chebint:ChebyshevInterval,target_degree:int,):
         matfun,rhsfun = center_chebint.separate_funs()
         interrelem = self.interr.generate_element(target_degree,matfun,rhsfun,)

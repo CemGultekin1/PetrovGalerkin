@@ -21,9 +21,21 @@ class BoundaryConditionElementFactory:
 class BoundaryElementFactory(Boundary):
     def __init__(self,degree:int) -> None:
         self.degree = degree
-        self.center = np.empty((self.degree,self.degree),dtype = float)  
-        self.right_cross = np.empty((self.degree,self.degree),dtype = float)
-        self.left_cross = np.empty((self.degree,self.degree),dtype = float)
+        dub = (self.degree,self.degree)
+        self.center = np.empty(dub,dtype = float)  
+        self.right_cross = np.empty(dub,dtype = float)
+        self.left_cross = np.empty(dub,dtype = float)
+        
+        self.dcenter_on_right = np.empty(dub,dtype = float)  
+        self.dcenter_on_left = np.empty(dub,dtype = float)  
+
+
+        self.dright_cross_dright = np.empty(dub,dtype = float)
+        self.dright_cross_dcenter = np.empty(dub,dtype = float)
+        
+        self.dleft_cross_dcenter = np.empty(dub,dtype = float)        
+        self.dleft_cross_dleft = np.empty(dub,dtype = float)        
+        
         self.value = Value(degree)
         self.filledup = False
     def fillup(self,):
@@ -32,18 +44,42 @@ class BoundaryElementFactory(Boundary):
             self.center[i,j] =  self.value.right[i]*self.value.right[j]/2 - self.value.left[i]*self.value.left[j]/2
             self.right_cross[i,j] =  -self.value.left[i]*self.value.right[j]/2
             self.left_cross[i,j] =  self.value.right[i]*self.value.left[j]/2
+            
+            self.dcenter_on_right[i,j] =  self.value.dright[i]*self.value.right[j]/2 + self.value.right[i]*self.value.dright[j]/2
+            self.dcenter_on_left[i,j] = - self.value.dleft[i]*self.value.left[j]/2  - self.value.left[i]*self.value.dleft[j]/2
+            
+            self.dright_cross_dright[i,j] =  -self.value.dleft[i]*self.value.right[j]/2
+            self.dright_cross_dcenter[i,j] =  -self.value.left[i]*self.value.dright[j]/2
+            
+            self.dleft_cross_dcenter[i,j] =  self.value.right[i]*self.value.dleft[j]/2 
+            self.dleft_cross_dleft[i,j] =  self.value.dright[i]*self.value.left[j]/2
         self.filledup = True
     def generate_element(self,degree1:int,degree2:int,degree3:int,):
         bcross = self.left_cross[:degree1,:degree2]
         fcross = self.right_cross[:degree3,:degree2]
-        base = self.center[:degree2,:degree2]  
-        # if degree2==2:
-        #     logging.debug(f'Center = \n{base}')
-        
+        base = self.center[:degree2,:degree2]
+        return BoundaryElement(bcross,base,fcross)
+    def generate_time_derivative_element(self,degree1:int,degree2:int,degree3:int,\
+                                            h1:float,h2:float,h3:float,\
+                                            left: bool = True):
+        if left:
+            bcross = self.dleft_cross_dcenter[:degree1,:degree2]/h2*2 \
+                        + self.dleft_cross_dleft[:degree1,:degree2]/h1*2
+            fcross = self.dright_cross_dcenter[:degree3,:degree2]*0
+            base = self.dcenter_on_left[:degree2,:degree2]/h2*2
+        else:
+            bcross = self.dleft_cross_dcenter[:degree1,:degree2]*0        
+            fcross = self.dright_cross_dcenter[:degree3,:degree2]/h2*2 \
+                        + self.dright_cross_dright[:degree3,:degree2]/h3*2
+            base = self.dcenter_on_right[:degree2,:degree2]/h2*2
         return BoundaryElement(bcross,base,fcross)
     def averaging_edge_value(self,leftdegree:int,rightdegree:int):        
         leftval = self.value.right[:leftdegree]/2
         rightval = self.value.left[:rightdegree]/2
+        return leftval,rightval
+    def averaging_time_derivative_edge_value(self,leftdegree:int,rightdegree:int):        
+        leftval = self.value.dright[:leftdegree]/2
+        rightval = self.value.dleft[:rightdegree]/2
         return leftval,rightval
     def create_boundary_condition_element_factory(self,bc:BoundaryCondition,):
         return BoundaryConditionElementFactory(bc,self.value)

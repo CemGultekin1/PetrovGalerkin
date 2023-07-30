@@ -41,6 +41,11 @@ class TriRowColumn:
     @property
     def height(self,):
         return sum(self.sides)
+    def add(self,trc:'TriRowColumn'):
+        for i,(lmat,rmat) in enumerate(zip(self._matclm,trc._matclm)):
+            self._matclm[i] = lmat+rmat
+        self.rhsclm += trc.rhsclm
+            
     def trim(self,left:bool = False,right:bool = False,center:bool = False):
         if left:
             self._matclm[0] = np.empty((0,self.width))

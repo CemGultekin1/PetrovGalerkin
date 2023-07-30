@@ -37,24 +37,48 @@ class InteriorElementMatrices:
         
         
 class InteriorElementFactory(QuadratureTensor):
-    def tri_multip(self,coeff:np.ndarray,degree:int)->np.ndarray:
+    def tri_multip(self,coeff:np.ndarray,degree:int,multiplier :str= 'tri_quads')->np.ndarray:
         deg1 = coeff.shape[0]
-        return np.dot(self.tri_quads[:degree,:degree,:deg1],coeff) 
-    def dub_multip(self,coeff:np.ndarray,degree:int)->np.ndarray:
+        return np.dot(self.__dict__[multiplier][:degree,:degree,:deg1],coeff)     
+    def dub_multip(self,coeff:np.ndarray,degree:int,multiplier :str= 'dub_quads')->np.ndarray:
         deg1 = coeff.shape[0]
-        return np.dot(self.dub_quads[:degree,:deg1],coeff)
+        return np.dot(self.__dict__[multiplier][:degree,:deg1],coeff)    
     def generate_element(self,degree:int,matfun:ChebyshevInterval,rhsfun:ChebyshevInterval):
-        deg = degree#matfun.degree
+        deg = degree
         h = matfun.h
-        matel = self.tri_multip(matfun.coeffs,deg,)*h/2
-        rhsel = self.dub_multip(rhsfun.coeffs,deg,)*h/2
+        dt = h/2
+        matel = self.tri_multip(matfun.coeffs,deg,)*dt
+        rhsel = self.dub_multip(rhsfun.coeffs,deg,)*dt
         der_quads = self.der_dub_quads[:deg,:deg]            
         return InteriorElement(degree,der_quads,matel,rhsel)
-
+    def generate_quad_interior_time_derivatives_element(self,degree:int,matfun:ChebyshevInterval,rhsfun:ChebyshevInterval,left:bool = False):
+        deg = degree
+        h = matfun.h
+        dt = h
+        
+        mat_one = self.tri_multip(matfun.coeffs,deg,multiplier='dtri_quads_one')/2
+        mat_xhat = self.tri_multip(matfun.coeffs,deg,multiplier='dtri_quads_xhat')/2
+        
+        rhs_one = self.dub_multip(rhsfun.coeffs,deg,multiplier='ddub_quads_one')/2
+        rhs_xhat = self.dub_multip(rhsfun.coeffs,deg,multiplier='ddub_quads_xhat')/2
+        
+        if left:
+            matel = -1/dt * mat_one + 1/dt**2*mat_xhat
+            rhsel = -1/dt * rhs_one + 1/dt**2*rhs_xhat
+        else:
+            matel = -1/dt * mat_one - 1/dt**2*mat_xhat
+            rhsel = -1/dt * rhs_one - 1/dt**2*rhs_xhat
+        return InteriorElement(degree,matel*0,matel,rhsel)
+    def generate_quad_boundry_time_derivatives_element(self,deg:int,matfun:ChebyshevInterval,rhsfun:ChebyshevInterval,left:bool = False):
+        if left:
+            matel = self.tri_multip(matfun.coeffs,deg,multiplier='left_bndr_val_of_tri_quads')
+            rhsel = self.dub_multip(rhsfun.coeffs,deg,multiplier='left_bndr_val_of_dub_quads')
+        else:            
+            matel = self.tri_multip(matfun.coeffs,deg,multiplier='right_bndr_val_of_tri_quads')
+            rhsel = self.dub_multip(rhsfun.coeffs,deg,multiplier='right_bndr_val_of_dub_quads')
+        return InteriorElement(deg,np.empty((0),),matel,rhsel)
 '''
-
 rule = u' - Au = 0 -> -v' - ATv = 0
-
 '''
 class AdjointInteriorElement(InteriorElement):
     def __init__(self,intel:InteriorElement):

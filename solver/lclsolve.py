@@ -10,11 +10,9 @@ class LocalEquationFactory(EquationFactory):
         self.interr = AdjointInteriorElementFactory(leqf.interr)
         leqf.setup_handle.append(self,)
     def setup_for_operations(self, boundary_condition: BoundaryCondition):
-        # super().setup_for_operations(boundary_condition)
-        # bndr_cond = self.generate_boundary_condition(self.dim,)
         self.bndr_cond = self.bndr.create_boundary_condition_element_factory(boundary_condition)
     @classmethod
-    def generate_boundary_condition(cls,dim:int):        
+    def generate_boundary_condition(cls,dim:int):
         bone = np.eye(dim)
         bzer = np.zeros((dim,dim))
         crhs = np.zeros((dim,))
@@ -30,14 +28,8 @@ class LocalSysAllocator(GlobalSysAllocator):
         gcheb = GridwiseChebyshev.from_single_chebyshev(chebint1,chebint1)
         lblocks = self.create_blocks(gcheb,(chebint.degree,))
         p = chebint.degree
-        # x = self.local_equation.interr.dub_quads[:p,:p] * chebint.h/2
-        # x = np.concatenate([x,x[:2]*0],axis = 0)
-        # x = x.reshape([p+2,1,p,1])
-        # rhs = x*np.eye(self.dim).reshape([1,self.dim,1,self.dim])
         rhs = np.zeros(((p+2)*self.dim,self.dim))
         rhs[-2*self.dim:-self.dim,:] = np.eye(self.dim)
         rhs[-self.dim:,:] = np.eye(self.dim)
         return lblocks,rhs
-    # def get_single_interval_design_block(self,chebint:ChebyshevInterval,chebint1:ChebyshevInterval):
-    #     return self.create_quadrature_block(chebint1,(chebint.degree,))
 
