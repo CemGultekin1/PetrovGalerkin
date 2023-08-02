@@ -5,7 +5,7 @@ import numpy as np
 from hybrid.handles import DesignParameteric, Parameteric
 from hybrid.symeq import org_sys,params_sys,design_sys,vnames
 from chebyshev import GridwiseChebyshev
-
+from hybrid.design import InvTrfFunction
 def non_scalar_input_wrapper(fun):
     def non_scalar_wrapped_fun(self,*args, **kwargs):
         if not np.isscalar(args[0]):
@@ -98,7 +98,7 @@ class HybridSystemEquations(Parameteric):
     def design_sys_bndr(self,*args,name:str = 'theta1'):
         return design_sys(*self.params,*args,bndr_flag=True,name = name)
     
-    
+
 class DesignFunctions(DesignParameteric):
     tr:float = 3.5e-3
     params_list :List[str] = []
@@ -129,7 +129,7 @@ class DesignFunctions(DesignParameteric):
             x01 = self.tr*i + self.trf_seq[i-1]/2
             x00 = self.tr*i - self.trf_seq[i-1]/2
             return (x00,x01),(x01,x11)
-    def design_gradient_collection(self,dldth1:np.ndarray,dldth2:np.ndarray,dldf_dfdth:np.ndarray,solution:GridwiseChebyshev):
+    def design_theta_gradient_collection(self,dldth1:np.ndarray,dldth2:np.ndarray,dldf_dfdth:np.ndarray,solution:GridwiseChebyshev):
         for i in range(dldf_dfdth.shape[0]):
             theta2int,theta1int = self.give_theta_interval(i)
             if bool(theta2int):
@@ -139,14 +139,17 @@ class DesignFunctions(DesignParameteric):
                 tchints1 = solution.find_touching_intervals(*theta1int)
                 dldf_dfdth[i] += np.sum(dldth1[tchints1])
         return dldf_dfdth
+    def design_invtrf_gradient_collection(self,dldrfpulse:np.ndarray,dldinst:np.ndarray, solution:GridwiseChebyshev):
+        itf = InvTrfFunction(self.trf_seq,self.tr)
+        dldinvtrf =  itf.time_derivatives_to_invtrf(dldinst,solution)
+        dldinvtrf1 = itf.rf_pulse_to_invtrf(dldrfpulse,solution)
+        return dldinvtrf + dldinvtrf1
     def __call__(self,t):
         if not np.isscalar(t):
             jac = list(map(self.__call__,t))
             return np.stack(jac,axis = 1)
         t = t% self.total_time
-        clsst = np.round(t/self.tr).astype(int)
-        # theta1,theta2        
-        # reltime,freq,rfpulse      
+        clsst = np.round(t/self.tr).astype(int)  
         if clsst == self.num_fp:
             return np.array([self.theta_seq[-1],self.theta_seq[-1],0,0,0])
         elif clsst == 0:
@@ -165,7 +168,7 @@ class DesignFunctions(DesignParameteric):
             
         reltime = dst*trf                
         
-        return np.array([th0,th1,reltime,1/trf,1])
+        return np.array([th0,th1,1/trf,reltime,1])
     
 class TimeDependentHSS(HybridSystemEquations,DesignFunctions):
     def __init__(self,theta_fun:np.ndarray,trf_fun:np.ndarray,**kwargs):
@@ -175,14 +178,9 @@ class TimeDependentHSS(HybridSystemEquations,DesignFunctions):
     def __getattribute__(self, __name: str) -> Any:
         if 'sys' in __name:
             fun = super().__getattribute__(__name)
-            # if 'bndr' not in __name:
             def wrapped_fun(t,**kwargs):
                 args = self(t)
                 return fun(*args,**kwargs)
-            # else:
-            #     args = self(0)
-            #     def wrapped_fun(**kwargs):
-            #         return fun(*args,**kwargs)
             return wrapped_fun                
         return super().__getattribute__(__name)
     
@@ -203,3 +201,6 @@ class DesignSequences(DesignFunctions):
             trf_seq = trf_seq
             assert len(trf_seq) == len(theta_seq) - 1
         super().__init__(theta_seq, trf_seq)
+    @property
+    def design_vec(self,):
+        return np.concatenate([self.theta_seq,1/self.trf_seq])

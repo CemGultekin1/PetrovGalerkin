@@ -10,7 +10,7 @@ from solver.errcontrol import SolutionRefiner
 from solver.glbsys import GlobalSysAllocator, SparseGlobalSystem
 from .lclerr import LocalErrorEstimate
 from .linsolve import GlobalSystemSolver
-from solver.design import AdjointMethod, DesignProduct
+from solver.design import AdjointMethod, DesignProduct, TimeInstanceDesignProduct
     
 @dataclass
 class PetrovGalerkinSolverSettings:
@@ -123,3 +123,5 @@ class LinearSolver(PetrovGalerkinSolverSettings,Dimensional):
         return AdjointMethod(self.equfactory,self.dim)
     def design_product(self,):
         return DesignProduct(self.lclerr.lcl_sys_alloc)
+    def time_instance_design_product(self,):
+        return TimeInstanceDesignProduct(self.lclerr.lcl_sys_alloc)

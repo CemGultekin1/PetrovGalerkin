@@ -1,6 +1,6 @@
 from copy import deepcopy
 import logging
-from typing import Dict, List
+from typing import Dict, List, Tuple
 from hybrid.cramer import CramerRaoBound
 from hybrid.handles import DesignParameteric, Parameteric
 from solver.settings import LinearSolver,LinearBoundaryProblem,PetrovGalerkinSolverSettings
@@ -13,11 +13,13 @@ class HybridStateSystemsForOptimization(Parameteric,DesignParameteric):
     param_hss:HybridStateSystem 
     design_theta1_hss:HybridStateSystem 
     design_theta2_hss:HybridStateSystem 
+    design_trf_hss:HybridStateSystem 
     def __init__(self,**kwargs) -> None:
         self.org_hss = HybridStateSystem(mode = 'org', **kwargs)
         self.param_hss = HybridStateSystem(mode = 'params', **kwargs)
         self.design_theta1_hss = HybridStateSystem(mode = 'design', design_param='theta1',**kwargs)
         self.design_theta2_hss = HybridStateSystem(mode = 'design', design_param='theta2',**kwargs)
+        self.design_invtrf_hss = HybridStateSystem(mode = 'design', design_param='invtrf',**kwargs)
         self.org_linear_boundary_problem,self.params_linear_boundary_problem = self.create_linear_boundary_problem()
     def create_linear_boundary_problem(self,):
         matfun_, rhsfun_,bndr_cond,edges = self.param_hss.matfun,\
@@ -100,9 +102,12 @@ class HybridStateJacobians(HybridStateSystemsForOptimization):
         
         adjoint_method = self.linear_solver.adjoint_method()
         design_product = self.linear_solver.design_product()
+        tins_design_product = self.linear_solver.time_instance_design_product()
         
         design1 = sol.matching_gcheb_from_functions(self.design_theta1_hss.matfun,self.design_theta1_hss.rhsfun)
-        design2 = sol.matching_gcheb_from_functions(self.design_theta2_hss.matfun,self.design_theta2_hss.rhsfun)        
+        design2 = sol.matching_gcheb_from_functions(self.design_theta2_hss.matfun,self.design_theta2_hss.rhsfun)
+        design3 = sol.matching_gcheb_from_functions(self.param_hss.matfun,self.param_hss.rhsfun)  
+        design4 = sol.matching_gcheb_from_functions(self.design_invtrf_hss.matfun,self.design_invtrf_hss.rhsfun)        
        
         crb = CramerRaoBound(fng.fingerprint_edges(),[0,1,2,])
         dldf = crb.gradient(fng)
@@ -110,25 +115,33 @@ class HybridStateJacobians(HybridStateSystemsForOptimization):
         dldf_dfdtheta = fng.design_derivative_inner_product(dldf)
         adjoint = adjoint_method.get_adjoint(sol,sol.global_sys_sol,dldedge)
         
-        dldx1 = design_product.dot(sol,adjoint,design1)
-        dldx2 = design_product.dot(sol,adjoint,design2)
-        dldx = self.param_hss.design_gradient_collection(dldx1,dldx2,dldf_dfdtheta,sol)
-        return dldx
+        dldth_1 = design_product.dot(sol,adjoint,design1)
+        dldth_2 = design_product.dot(sol,adjoint,design2)
+        dldtimes = tins_design_product.dot(sol,adjoint,design3)
+        dldrfpulse_invtrf = design_product.dot(sol,adjoint,design4)
+        dldth = self.param_hss.design_theta_gradient_collection(dldth_1,dldth_2,dldf_dfdtheta,sol)
+        dldinvtrf = self.param_hss.design_invtrf_gradient_collection(dldrfpulse_invtrf,dldtimes,sol)
+        dldth = np.concatenate([dldth,dldinvtrf])
+        return dldth
         
     
-    
+class Optimizable:
+    def jac(self,x)->np.ndarray:...
+    def eval(self,x)->float:...
 
-class OptimalDesign(HybridStateJacobians):
+class OptimalDesign(Optimizable,HybridStateJacobians):
     def __init__(self, linear_solver: LinearSolver = LinearSolver(PetrovGalerkinSolverSettings()), **kwargs) -> None:
         super().__init__(linear_solver, **kwargs)
-    def update(self,*params):
-        ds = DesignSequences(theta_seq=params[0],trf_seq=self.trf_seq)
+    def update(self,designvec):
+        nth = len(self.theta_seq)
+        theta,invtrf = np.split(designvec,[nth,])
+        ds = DesignSequences(theta_seq=theta,trf_seq=1/invtrf)
         self.change_of_design_parameters(ds)
-    def jac(self,*params):        
-        self.update(*params)
+    def jac(self,designvec):        
+        self.update(designvec)
         return self.optimal_design_jacobian
-    def eval(self,*params):
-        self.update(*params)
+    def eval(self,designvec):
+        self.update(designvec)
         return self.optimal_design_loss
     
 
@@ -201,4 +214,46 @@ class NLLS(HybridStateJacobians):
         return np.sum((fng - tfng)**2)
     
         
+class GradientTest:
+    def __init__(self,optimizable:Optimizable,x0:np.ndarray,seed :int = 0) -> None:
+        self.optimizable = optimizable
+        self.xinit = x0
+        self._yinit = None
+        np.random.seed(seed)
+        self.perturb = np.random.randn(len(x0))*0
+        self.perturb[50] = 1
+        self._grad = None
+    @property
+    def yinit(self,):
+        if self._yinit is None:
+            self._yinit = self.optimizable.eval(self.xinit)
+        return self._yinit
+    @property
+    def grad(self,):
+        if self._grad is None:
+            self._grad =  self.optimizable.jac(self.xinit)
+        return self._grad
+    def step_estimate(self,h:float)->Tuple[Tuple[float,float],float]:
+        x1 = self.xinit + h*self.perturb
+        y1 = self.optimizable.eval(x1)
+        dyg = self.grad @ self.perturb
+        dyh = (y1 - self.yinit)/h
+        relerr = np.abs(
+            dyg - dyh
+        )/(
+            np.abs(dyg) + np.abs(dyh)
+        )*2
+        ders = dyg,dyh
+        return (dyg,dyh),relerr,ders
+    def find_best_match(self,dh:float,num:int)->float:
+        h = 1e-3
+        hs = h*dh ** np.arange(num)
+        relerrs = []
+        for h in hs:
+            _,relerr,(dyg,dyh) = self.step_estimate(h)
+            formatter = "{:.2e}"
+            logging.info(f'h: {formatter.format(h)}\t\t relerr:{formatter.format(relerr)},\t\t {formatter.format(dyg),formatter.format(dyh)}')
+            relerrs.append(relerr)
+        return np.amin(relerrs)
+    
         

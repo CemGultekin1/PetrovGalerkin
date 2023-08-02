@@ -68,7 +68,7 @@ class TimeInstanceDesignProduct(DesignProduct):
     def interval_dot(self,solution:Tuple[ChebyshevInterval,ChebyshevInterval],\
                         adjoint:Tuple[ChebyshevInterval,ChebyshevInterval],\
                         problem:Tuple[ChebyshevInterval,ChebyshevInterval])->float:
-        left_right = self.time_derivative(*solution,*problem)
+        left_right = self.time_derivative(solution,problem)
         outs = 0.
         for (mat,rhs),sol,adj in zip(left_right,solution,adjoint):
             gchebr = mat@sol.coeffs.flatten() - rhs
@@ -82,7 +82,7 @@ class TimeInstanceDesignProduct(DesignProduct):
             prl = []
             for gce in gcheb:
                 cheb = gce.cheblist
-                prl.extend(zip(cheb[:-1],cheb[1:]))
+                prl.append(zip(cheb[:-1],cheb[1:]))
             return zip(*prl)
         for sltn,adj,dgch in one_off_zipper(solution,adjoint,design_gcheb):
             gradient.append(self.interval_dot(sltn,adj,dgch))

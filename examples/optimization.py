@@ -1,6 +1,6 @@
 import logging
 from solver.settings import PetrovGalerkinSolverSettings,LinearSolver
-from hybrid.optim import OptimalDesign,NLLS
+from hybrid.optim import OptimalDesign,NLLS,GradientTest
 from hybrid.eqtns import DesignSequences
 import matplotlib.pyplot as plt
 logging.basicConfig(level=logging.INFO)
@@ -21,12 +21,21 @@ def nlls_demo():
 def optdes_demo():
     pgs = PetrovGalerkinSolverSettings(degree_increments = (2,4,8,),\
                     max_rep_err=1e-2,max_lcl_err=1e-3,max_num_interval=2**12,)
-    linsolv = LinearSolver(pgs,) 
-    ds = DesignSequences(n = 500,random_initialization_seed = 0)
+    linsolv = LinearSolver(pgs,)
+    ds = DesignSequences(n = 50,random_initialization_seed = 0)
     optdes = OptimalDesign(linsolv,driving_functions = ds)
-    loss = optdes.eval(ds.theta_seq)
+    
+    gt = GradientTest(optdes,ds.design_vec,seed = 0)
+    loss = optdes.eval(ds.design_vec)
+    optdes.jac(ds.design_vec)
     logging.info(f'loss = {loss}')
 
+    
+    
+    relerr = gt.find_best_match(1/10,9)
+    logging.info(f'relerr = {relerr}')
+    
+    
     fng = optdes.params_fingerprints
     plt.plot(fng.fingerprint_times,fng.values,label = fng.signal_names)
     plt.legend()

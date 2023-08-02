@@ -6,7 +6,7 @@ class CramerRaoBound:
         self.time_edges = time_edges
         self.variables_inds = variables_inds
     def fischer_mat(self,fingerprints:Fingerprints):
-        fischer = fingerprints.values.T@fingerprints.values 
+        fischer = fingerprints.values.T@fingerprints.values  + np.eye(fingerprints.values.shape[1])
         return fischer
     def crb_mat(self,fingerprints:Fingerprints):
         fmat = self.fischer_mat(fingerprints)

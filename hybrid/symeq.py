@@ -1,14 +1,15 @@
 import sympy as sym
 from sympy.utilities import lambdify
 import numpy as np
-vnames = 'm0s, invt1, invt2f, r, t2s, theta1, theta2, rfpulse, freq, reltime'
-m0s,invt1,invt2f,r,t2s,theta1,theta2,rfpulse,freq,reltime = sym.symbols(vnames)
+vnames = 'm0s, invt1, invt2f, r, t2s, theta1, theta2, rfpulse, invtrf, reltime'
+m0s,invt1,invt2f,r,t2s,theta1,theta2,rfpulse,invtrf,reltime = sym.symbols(vnames)
 
 vnames = vnames.split(', ')
 
+invtrf_ = 2000
 alpha = theta2 + theta1
-theta = theta1*(1 - rfpulse) + ((theta2 + theta1)*reltime*freq - theta1)*rfpulse
-dtheta = alpha*rfpulse*freq
+theta = theta1*(1 - rfpulse) + ((theta2 + theta1)*reltime*invtrf_ - theta1)*rfpulse
+dtheta = alpha*rfpulse*invtrf_
 mat = sym.Matrix(
     [[sym.cos(theta)**2*invt1 - sym.sin(theta)**2*invt2f - sym.cos(theta)**2*r*m0s,
         r*(1-m0s)*sym.cos(theta)],[
@@ -26,8 +27,8 @@ zmat = sym.Matrix(
 )
 
 param_vars = [m0s,invt1,invt2f,r,t2s]
-design_vars = [theta1,theta2]
-extra_vars = [reltime,freq,rfpulse]
+design_vars = [theta1,theta2,invtrf]
+extra_vars = [reltime,rfpulse]
 
 all_vars = param_vars + design_vars + extra_vars
 
